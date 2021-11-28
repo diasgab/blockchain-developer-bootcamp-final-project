@@ -1,3 +1,8 @@
+const dotenv = require("dotenv");
+dotenv.config();
+
+const HDWalletProvider = require('@truffle/hdwallet-provider');
+const mnemonic = process.env.RINKEBY_MNEMONIC;
 
 module.exports = {
   networks: {
@@ -14,6 +19,13 @@ module.exports = {
       network_id: 4,
       skipDryRun: true,
       gas: 6000000
+    },
+
+    rinkeby: {
+      provider: () => new HDWalletProvider(mnemonic, `https://rinkeby.infura.io/v3/${process.env.RINKEBY_INFURA_PROJECT_ID}`),
+      network_id: 4,       // rinkeby's id
+      gas: 5500000,        // rinkeby has a lower block limit than mainnet
+      skipDryRun: true
     },
   },
 

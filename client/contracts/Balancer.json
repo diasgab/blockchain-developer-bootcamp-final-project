@@ -61779,14 +61779,136 @@
   },
   "networks": {
     "4": {
-      "events": {},
+      "events": {
+        "0xf59d0ae4e98bf93f09241ca4f8223fb0ecfebf4027c3087280ecec9c18d32f75": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "address",
+              "name": "assetAddress",
+              "type": "address"
+            }
+          ],
+          "name": "LogAllowedAssetAdded",
+          "type": "event"
+        },
+        "0xa8126f7572bb1fdeae5b5aa9ec126438b91f658a07873f009d041ae690f3a193": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "address",
+              "name": "accountAddress",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "amount",
+              "type": "uint256"
+            }
+          ],
+          "name": "LogDepositMade",
+          "type": "event"
+        },
+        "0x74f265d2619fe6a0183c9524a5120afb2050287b300ca0770ae5834da23c2088": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "address",
+              "name": "assetAddress",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "percentage",
+              "type": "uint256"
+            }
+          ],
+          "name": "LogPortfolioAssetAdded",
+          "type": "event"
+        },
+        "0xb24dcbc2f0ea9133e820ca155e83232c8e2612051982b9edc7234fd0f3692cf9": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "address",
+              "name": "accountAddress",
+              "type": "address"
+            }
+          ],
+          "name": "LogPortfolioDeleted",
+          "type": "event"
+        },
+        "0xf1ac3a3ea39c1e8920e24fd3e5dcf23814d0219a425b9bee1320a052696cb66f": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "address",
+              "name": "accountAddress",
+              "type": "address"
+            }
+          ],
+          "name": "LogPortfolioSealed",
+          "type": "event"
+        },
+        "0xf9226daf630542048a23086c6af599511aac100ec8f532793cc9697d061bed7e": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": false,
+              "internalType": "address",
+              "name": "accountAddress",
+              "type": "address"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "withdrawAmount",
+              "type": "uint256"
+            },
+            {
+              "indexed": false,
+              "internalType": "uint256",
+              "name": "newBalance",
+              "type": "uint256"
+            }
+          ],
+          "name": "LogWithdrawal",
+          "type": "event"
+        },
+        "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0": {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "previousOwner",
+              "type": "address"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "newOwner",
+              "type": "address"
+            }
+          ],
+          "name": "OwnershipTransferred",
+          "type": "event"
+        }
+      },
       "links": {},
-      "address": "0x25632807dB6346125d5e6C01eDAf2934fd134F72",
-      "transactionHash": "0xf4b8f1b1837b7e84bedbd52f6bdc283e61b7c93426cb3ed21f049853f9092f72"
+      "address": "0xa701E94fC58865c91302085C45Ced6E2fE8101d8",
+      "transactionHash": "0x91f927ff60a1d636e10240fb6ceb50c17a37c1764abe186108ca1764904ffddf"
     }
   },
   "schemaVersion": "3.4.1",
-  "updatedAt": "2021-11-28T05:31:50.549Z",
+  "updatedAt": "2021-11-28T06:27:16.383Z",
   "networkType": "ethereum",
   "devdoc": {
     "author": "Gabriel R. Dias",
