@@ -1,0 +1,14 @@
+client/build
+client/node_modules
+client/logs
+client/*.log
+client/npm-debug.log*
+client/.DS_Store
+client/.env
+client/.idea
+
+node_modules
+build
+.env
+.idea
+.DS_Store
