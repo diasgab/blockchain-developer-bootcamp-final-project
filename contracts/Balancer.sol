@@ -24,18 +24,21 @@ contract Balancer is Ownable {
     /// @notice allowed assets that can be part of a portfolio (to be edited only by contract owner)
     address[] public allowedAssets;
 
+    // @notice local store of asset prices
+    mapping(address => uint) public assetPrices;
+
     /// @notice the max amount of assets an account can add in a portfolio
     uint8 public constant MAX_PORTFOLIO_ASSETS = 10;
 
     struct Portfolio {
-        /// @notice once a portfolio is sealed no more changes are allowed in it (it must be deleted)
-        /// @dev sealed is a reserved word
-        bool sealedPortfolio;
+        State status;
         mapping(address => uint) assetPercentages;
         mapping(address => uint) assetBalances;
         /// @dev this array make it easy to iterate over the portfolio assets
         address[] assets;
     }
+
+    enum State { Empty, Sealed, Initialized, Running }
 
     /// @notice Holds an account portfolio
     mapping(address => Portfolio) public portfolios;
@@ -131,7 +134,7 @@ contract Balancer is Ownable {
     /// @return The account portfolio
     function fetchPortfolio(address _accountAddress) public view returns
     (
-        bool,
+        State,
         address[] memory,
         uint[] memory,
         uint[] memory
@@ -152,18 +155,18 @@ contract Balancer is Ownable {
         }
 
         return (
-            portfolios[_accountAddress].sealedPortfolio,
+            portfolios[_accountAddress].status,
             assets,
             percentages,
             assetBalances
         );
     }
 
-    /// @notice Determines whether a portfolio is sealed or not
+    /// @notice Fetch the portfolio status
     /// @param _accountAddress The portfolio account
-    /// @return Returns boolean answering the question
-    function isPortfolioSealed(address _accountAddress) public view returns (bool) {
-        return portfolios[_accountAddress].sealedPortfolio;
+    /// @return Returns the status
+    function getPortfolioStatus(address _accountAddress) public view returns (State) {
+        return portfolios[_accountAddress].status;
     }
 
     /// @notice Deposit ether in the contract
@@ -212,7 +215,7 @@ contract Balancer is Ownable {
         uint[] memory _percentages)
     external {
         require(balances[msg.sender] > 0, "Not enough funds");
-        require(!portfolios[msg.sender].sealedPortfolio, "Portfolio already sealed");
+        require(portfolios[msg.sender].status == State.Empty, "Portfolio already created");
         require(_assets.length <= MAX_PORTFOLIO_ASSETS, "Max amount of assets allowed");
         require(_assets.length >= 2, "The minimum amount of assets is 2");
         require(_assets.length == _percentages.length, "Missing data for assets and percentages");
@@ -234,14 +237,14 @@ contract Balancer is Ownable {
         }
 
         // finally, let's seal the portfolio
-        portfolios[msg.sender].sealedPortfolio = true;
+        portfolios[msg.sender].status = State.Sealed;
 
         emit LogPortfolioCreated(_assets, _percentages);
     }
 
     /// @notice Stop the portfolio rebalancing and return the assets balance to ether
     function deletePortfolio() public {
-        require(portfolios[msg.sender].sealedPortfolio, "There is no portfolio");
+        require(portfolios[msg.sender].status != State.Empty, "There is no portfolio");
 
         uint bought;
         address assetAddress;
@@ -264,7 +267,7 @@ contract Balancer is Ownable {
             portfolios[msg.sender].assets.pop();
         }
 
-        portfolios[msg.sender].sealedPortfolio = false;
+        portfolios[msg.sender].status = State.Empty;
 
         emit LogPortfolioDeleted(msg.sender);
     }
@@ -272,7 +275,7 @@ contract Balancer is Ownable {
     /// @notice Run the first asset distribution once the portfolio is sealed
     function runInitialPortfolioDistribution() public {
         require(balances[msg.sender] > 0, "Not enough balance");
-        require(portfolios[msg.sender].sealedPortfolio, "Portfolio must be sealed");
+        require(portfolios[msg.sender].status == State.Sealed, "Portfolio must be sealed");
 
         uint initialBalance = balances[msg.sender];
         uint percentage;
@@ -355,59 +358,34 @@ contract Balancer is Ownable {
         return minOuts[1];
     }
 
-    // -----------------------------------------------
-    // Experimental
-    // -----------------------------------------------
-
-    // we need this to simulate a price change. We need a source to populate these values
-    mapping(address => uint) public assetPrices;
-
-    function fetchAssetsPrices() public view returns (address[] memory, uint[] memory) {
-        address[] memory assets = new address[](allowedAssets.length);
-        uint[] memory prices = new uint[](allowedAssets.length);
-
-        for (uint i; i < allowedAssets.length; i++) {
-            assets[i] = allowedAssets[i];
-            prices[i] = assetPrices[allowedAssets[i]];
-        }
-
-        return (assets, prices);
-    }
-
-    function updateAssetPrices() external {
-        uint bought;
-        for (uint i = 0; i < allowedAssets.length; i++) {
-            bought = checkAmountOut(allowedAssets[i], 10**18);
-            assetPrices[allowedAssets[i]] = (10**18 * 10**18) / bought;
-        }
-    }
-
-    function checkAmountOut(address token2, uint amount)
-    public
-    returns (uint)
+    /// @notice Returns the price of a token
+    /// @dev TODO: check performance using uniswap factory and pair contracts to retrieve a token price.
+    /// @dev TODO: create an asset price cache
+    /// @param _token The asset address
+    /// @return The asset price in wei
+    function getAssetPrice(address _token) public returns (uint)
     {
-        address token1 = router.WETH();
-
+        uint amount = 10**18;
         address[] memory path = new address[](2);
-        path[0] = token1;
-        path[1] = token2;
+        path[0] = router.WETH();
+        path[1] = _token;
 
-        IERC20(token1).approve(address(router), amount);
+        IERC20(router.WETH()).approve(address(router), amount);
+        uint estimatedBuy = router.getAmountsOut(amount, path)[1];
 
-        uint[] memory minOuts = router.getAmountsOut(amount, path);
-
-        return minOuts[1];
+        return (10**18 * 10**18) / estimatedBuy;
     }
 
     function runPortfolioRebalance() external {
+
+        require(portfolios[msg.sender].status == State.Initialized, "Portfolio must be initialized");
 
         // 1. update portfolio asset prices
         address assetAddress;
         uint bought;
         for (uint i = 0; i < portfolios[msg.sender].assets.length; i++) {
             assetAddress = portfolios[msg.sender].assets[i];
-            bought = checkAmountOut(assetAddress, 10**18);
-            assetPrices[assetAddress] = (10**18 * 10**18) / bought;
+            assetPrices[assetAddress] = getAssetPrice(assetAddress);
         }
 
         // 2. calculate the new portfolio total value
@@ -479,5 +457,26 @@ contract Balancer is Ownable {
         // 6. Handle any remaining balance
         // TODO: handle the gas reserve properly
         //balances[msg.sender] += gasReserve;
+    }
+
+
+    // TO DELETE
+
+    function fetchAssetsPrices() public view returns (address[] memory, uint[] memory) {
+        address[] memory assets = new address[](allowedAssets.length);
+        uint[] memory prices = new uint[](allowedAssets.length);
+
+        for (uint i; i < allowedAssets.length; i++) {
+            assets[i] = allowedAssets[i];
+            prices[i] = assetPrices[allowedAssets[i]];
+        }
+
+        return (assets, prices);
+    }
+
+    function updateAssetPrices() external {
+        for (uint i = 0; i < allowedAssets.length; i++) {
+            assetPrices[allowedAssets[i]] = getAssetPrice(allowedAssets[i]);
+        }
     }
 }

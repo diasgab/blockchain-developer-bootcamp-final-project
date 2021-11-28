@@ -11,6 +11,14 @@ contract("Balancer", function (accounts) {
 
   const UNISWAP_ROUTER = '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D';
 
+  // status
+  const Status = {
+    EMPTY: 0,
+    SEALED: 1,
+    INITIALIZED: 2,
+    RUNNING: 3,
+  };
+
   beforeEach(async () => {
     instance = await Balancer.new(UNISWAP_ROUTER);
   });
@@ -129,8 +137,8 @@ contract("Balancer", function (accounts) {
     assert.equal(40, logPercentages[1], "wrong percentage assignment for BAT");
 
     // finally check the portfolio is sealed
-    const sealedPortfolio = await instance.isPortfolioSealed(userAccount);
-    assert.equal(true, sealedPortfolio, "portfolio should be sealed");
+    const portfolioStatus = await instance.getPortfolioStatus(userAccount);
+    assert.equal(portfolioStatus.toNumber(), Status.SEALED, "portfolio should be sealed");
   });
 
   it("TODO: should check the the allowed assets to be added to a portfolio", async () => {
