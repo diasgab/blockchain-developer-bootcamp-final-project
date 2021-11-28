@@ -2,7 +2,10 @@ const Balancer = artifacts.require("Balancer");
 const fs = require('fs');
 
 module.exports = async function (deployer) {
-  await deployer.deploy(Balancer);
+  await deployer.deploy(
+    Balancer,
+    '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', // Uniswap rinkeby router
+  );
 
   let config = {
     balancerAddress: Balancer.address

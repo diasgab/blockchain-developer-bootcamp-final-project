@@ -9,8 +9,10 @@ contract("Balancer", function (accounts) {
   // address for BAT token in rinkeby network
   const BAT_token = "0xbF7A7169562078c96f0eC1A8aFD6aE50f12e5A99";
 
+  const UNISWAP_ROUTER = '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D';
+
   beforeEach(async () => {
-    instance = await Balancer.new();
+    instance = await Balancer.new(UNISWAP_ROUTER);
   });
 
   it("is owned by owner using openzeppelin Ownable", async () => {

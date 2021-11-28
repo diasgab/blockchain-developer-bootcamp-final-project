@@ -2,8 +2,8 @@
 pragma solidity 0.8.6;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "./Router.sol";
+import './interfaces/IUniswapV2Router02.sol';
+import './interfaces/IERC20.sol';
 
 /**
  * @title Hold a user portfolio with multiple assets
@@ -16,10 +16,7 @@ contract Balancer is Ownable {
     // Properties
     // -----------------------------------------------
 
-    // Uniswap router v2 address in rinkeby
-    Router router = Router(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
-    // WETH address in rinkeby
-    ERC20 WETH_token = ERC20(0xc778417E063141139Fce010982780140Aa0cD5Ab);
+    IUniswapV2Router02 public router;
 
     /// @notice Holds an account balance in the contract (not assigned to any asset in a portfolio)
     mapping(address => uint) public balances;
@@ -121,7 +118,10 @@ contract Balancer is Ownable {
     // -----------------------------------------------
 
     // constructor
-    constructor() {}
+    constructor (address _router) {
+        // uniswap router
+        router = IUniswapV2Router02(_router);
+    }
 
     // fallback method
     receive() external payable {}
@@ -358,13 +358,13 @@ contract Balancer is Ownable {
     returns (uint)
     {
         /// @dev When using ether in the path, the WETH token address is needed because there is no address for ether ;)
-        address origTokenAddress = address(WETH_token);
+        address origTokenAddress = router.WETH();
 
         address[] memory path = new address[](2);
         path[0] = origTokenAddress;
         path[1] = _destTokenAddress;
 
-        ERC20(origTokenAddress).approve(address(router), _amountIn);
+        IERC20(origTokenAddress).approve(address(router), _amountIn);
 
         uint[] memory minOuts = router.getAmountsOut(_amountIn, path);
 
@@ -386,13 +386,13 @@ contract Balancer is Ownable {
     public
     returns (uint)
     {
-        address destTokenAddress = address(WETH_token);
+        address destTokenAddress = router.WETH();
 
         address[] memory path = new address[](2);
         path[0] = _origTokenAddress;
         path[1] = destTokenAddress;
 
-        ERC20(_origTokenAddress).approve(address(router), _amountIn);
+        IERC20(_origTokenAddress).approve(address(router), _amountIn);
 
         uint[] memory minOuts = router.getAmountsOut(_amountIn, path);
 
@@ -438,13 +438,13 @@ contract Balancer is Ownable {
     public
     returns (uint)
     {
-        address token1 = address(WETH_token);
+        address token1 = router.WETH();
 
         address[] memory path = new address[](2);
         path[0] = token1;
         path[1] = token2;
 
-        ERC20(token1).approve(address(router), amount);
+        IERC20(token1).approve(address(router), amount);
 
         uint[] memory minOuts = router.getAmountsOut(amount, path);
 
