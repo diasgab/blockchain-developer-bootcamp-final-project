@@ -108,58 +108,33 @@ contract("Balancer", function (accounts) {
     );
   });
 
-  it("should allow a user to add an asset to their portfolio", async () => {
-    await instance.addAllowedAsset(UNI_token, { from: contractOwner });
-
-    await instance.deposit({ from: userAccount, value: deposit });
-    await instance.addPortfolioAsset(UNI_token, 60, { from: userAccount });
-
-    const portfolio = await instance.fetchPortfolio(userAccount);
-
-    assert.equal(UNI_token, portfolio[1][0], "wrong asset assignment");
-    assert.equal(60, portfolio[2][0], "wrong asset percentage");
-  });
-
-  it("should emit an event every time an asset is added to a user portfolio", async () => {
-    await instance.addAllowedAsset(UNI_token, { from: contractOwner });
-
-    await instance.deposit({ from: userAccount, value: deposit });
-    const result = await instance.addPortfolioAsset(UNI_token, 60, {
-      from: userAccount,
-    });
-
-    const logAssetAddress = result.logs[0].args.assetAddress;
-    const logAssetPercentage = result.logs[0].args.percentage;
-
-    assert.equal(
-      UNI_token,
-      logAssetAddress,
-      "LogPortfolioAssetAdded event: logAssetAddress property not emitted, check addPortfolioAsset method"
-    );
-
-    assert.equal(
-      60,
-      logAssetPercentage,
-      "LogPortfolioAssetAdded event: logAssetPercentage property not emitted, check addPortfolioAsset method"
-    );
-  });
-
-  it("TODO: should check the the allowed assets to be added to a portfolio", async () => {
-    assert.isTrue(true);
-  });
-
-  it("should allow a user to seal a portfolio", async () => {
+  it("should allow a user to create a portfolio", async () => {
     await instance.addAllowedAsset(UNI_token, { from: contractOwner });
     await instance.addAllowedAsset(BAT_token, { from: contractOwner });
 
     await instance.deposit({ from: userAccount, value: deposit });
-    await instance.addPortfolioAsset(UNI_token, 60, { from: userAccount });
-    await instance.addPortfolioAsset(BAT_token, 40, { from: userAccount });
-    await instance.sealPortfolio({ from: userAccount });
 
+    let assets = [UNI_token, BAT_token];
+    let percentages = [60, 40];
+
+    const portfolio = await instance.createPortfolio(assets, percentages, { from: userAccount });
+
+    const logAssets = portfolio.logs[0].args.assets;
+    const logPercentages = portfolio.logs[0].args.percentages;
+
+    assert.equal(UNI_token, logAssets[0], "wrong asset assignment for UNI");
+    assert.equal(BAT_token, logAssets[1], "wrong asset assignment for BAT");
+
+    assert.equal(60, logPercentages[0], "wrong percentage assignment for UNI");
+    assert.equal(40, logPercentages[1], "wrong percentage assignment for BAT");
+
+    // finally check the portfolio is sealed
     const sealedPortfolio = await instance.isPortfolioSealed(userAccount);
-
     assert.equal(true, sealedPortfolio, "portfolio should be sealed");
+  });
+
+  it("TODO: should check the the allowed assets to be added to a portfolio", async () => {
+    assert.isTrue(true);
   });
 
   it("TODO: should emit an event when a user portfolio is sealed", async () => {

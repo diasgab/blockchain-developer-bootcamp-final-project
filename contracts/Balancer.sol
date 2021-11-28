@@ -63,14 +63,10 @@ contract Balancer is Ownable {
         uint newBalance
     );
 
-    /// @notice Emitted when a new asset is added to a portfolio
-    /// @param assetAddress The asset address
-    /// @param percentage The assigned percentage
-    event LogPortfolioAssetAdded(address assetAddress, uint percentage);
-
-    /// @notice Emitted when a portfolio is sealed
-    /// @param accountAddress The account which performed the operation
-    event LogPortfolioSealed(address accountAddress);
+    /// @notice Emitted when a new portfolio is created
+    /// @param assets The assets address
+    /// @param percentages The assigned percentage per asset (in order)
+    event LogPortfolioCreated(address[] assets, uint[] percentages);
 
     /// @notice Emitted when a portfolio is deleted
     /// @param accountAddress The account which performed the operation
@@ -100,24 +96,10 @@ contract Balancer is Ownable {
         _;
     }
 
-    /// @notice Check if the asset is allowed for use in the contract
-    /// @param _assetAddress The address of the token to be added
-    modifier isAllowedAsset(address _assetAddress) {
-        bool isAllowed = false;
-        for (uint i; i < allowedAssets.length; i++) {
-            if (allowedAssets[i] == _assetAddress) {
-                isAllowed = true;
-            }
-        }
-        require(isAllowed, "Token not allowed");
-        _;
-    }
-
     // -----------------------------------------------
     // Methods
     // -----------------------------------------------
 
-    // constructor
     constructor (address _router) {
         // uniswap router
         router = IUniswapV2Router02(_router);
@@ -209,86 +191,52 @@ contract Balancer is Ownable {
         return balances[msg.sender];
     }
 
-    /// @notice Calculate the sum af all asset percentages for a given account in a portfolio
-    /// @param _accountAddress The account address
-    /// @return The total sum
-    function calculatePortfolioTotalAssignments(address _accountAddress)
-    private
-    view
-    returns (uint)
-    {
+    /// @notice Check if the asset is allowed for use in the contract
+    /// @param _assetAddress The address of the token to be added
+    function isAllowedAsset(address _assetAddress) private view returns (bool) {
+        for (uint i; i < allowedAssets.length; i++) {
+            if (allowedAssets[i] == _assetAddress) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// @notice Creates a portfolio and seal it (close it for changes)
+    /// @dev The order is relevant: each percentage will be associated with the corresponding asset by order
+    /// @param _assets Assets address (must be an allowed token)
+    /// @param _percentages The allocation percentage for each asset
+    function createPortfolio(
+        address[] memory _assets,
+        uint[] memory _percentages)
+    external {
+        require(balances[msg.sender] > 0, "Not enough funds");
+        require(!portfolios[msg.sender].sealedPortfolio, "Portfolio already sealed");
+        require(_assets.length <= MAX_PORTFOLIO_ASSETS, "Max amount of assets allowed");
+        require(_assets.length >= 2, "The minimum amount of assets is 2");
+        require(_assets.length == _percentages.length, "Missing data for assets and percentages");
+
+        // check total percentage integrity
         uint total = 0;
-        for (uint i = 0; i < portfolios[_accountAddress].assets.length; i++) {
-            total += portfolios[_accountAddress].assetPercentages[portfolios[_accountAddress].assets[i]];
+        for (uint i = 0; i < _percentages.length; i++) {
+            require(_percentages[i] >= 1 && _percentages[i] <= 99, "The percentage range per asset is 1 to 99");
+            total += _percentages[i];
         }
 
-        return total;
-    }
+        require(total == 100, "The sum of all the percentages must equal 100");
 
-    /// @notice Add one asset to the portfolio
-    /// @param _assetAddress Asset address (must be an allowed token)
-    /// @param _percentage The allocation percentage for the given asset
-    function addPortfolioAsset(address _assetAddress, uint _percentage)
-    public
-    isAllowedAsset(_assetAddress)
-    {
-        require(
-            portfolios[msg.sender].assets.length < MAX_PORTFOLIO_ASSETS,
-            "Max amount of tokens reached"
-        );
-        require(
-            balances[msg.sender] > 0,
-            "A deposit must be made"
-        );
-        require(
-            _percentage < 100,
-            "The maximum percentage for a given asset is 99"
-        );
-        require(
-            _percentage > 0,
-            "The minimum percentage for a given asset is 1"
-        );
-        require(
-            !portfolios[msg.sender].sealedPortfolio,
-            "Portfolio not open for changes"
-        );
-        require(
-            portfolios[msg.sender].assetPercentages[_assetAddress] == 0,
-            "Portfolio asset already exists in portfolio"
-        );
+        // check assets integrity and add them to the portfolio
+        for (uint i = 0; i < _assets.length; i++) {
+            require(isAllowedAsset(_assets[i]), "Asset not allowed");
+            portfolios[msg.sender].assetPercentages[_assets[i]] = _percentages[i];
+            portfolios[msg.sender].assets.push(_assets[i]);
+        }
 
-        portfolios[msg.sender].assetPercentages[_assetAddress] = _percentage;
-        // NOTE: we might not reached the 100% of the portfolio assignments yet
-        require(calculatePortfolioTotalAssignments(msg.sender) <= 100, "Invalid portfolio distribution");
-
-        // NOTE: this is redundant because the default value should be zero anyway
-        portfolios[msg.sender].assetBalances[_assetAddress] = 0;
-        portfolios[msg.sender].assets.push(_assetAddress);
-
-        emit LogPortfolioAssetAdded(_assetAddress, _percentage);
-    }
-
-    /// @notice Check the portfolio integrity and close it for changes
-    function sealPortfolio() public {
-        require(!portfolios[msg.sender].sealedPortfolio, "Portfolio already sealed");
-        require(portfolios[msg.sender].assets.length > 1, "Portfolio must contain at least 2 assets");
-        require(calculatePortfolioTotalAssignments(msg.sender) == 100, "Invalid portfolio distribution");
-
+        // finally, let's seal the portfolio
         portfolios[msg.sender].sealedPortfolio = true;
-        emit LogPortfolioSealed(msg.sender);
-    }
 
-    function createFullPortfolio(address[] memory assets, uint[] memory percentages) public {
-
-        require(!portfolios[msg.sender].sealedPortfolio, "Portfolio already sealed");
-        require(assets.length == percentages.length, "Missing data for assets and percentages");
-        require(assets.length <= MAX_PORTFOLIO_ASSETS, "Max amount of tokens allowed");
-
-        for (uint i = 0; i < assets.length; i++) {
-            addPortfolioAsset(assets[i], percentages[i]);
-        }
-
-        sealPortfolio();
+        emit LogPortfolioCreated(_assets, _percentages);
     }
 
     /// @notice Stop the portfolio rebalancing and return the assets balance to ether

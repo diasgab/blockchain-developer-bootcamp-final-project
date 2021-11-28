@@ -365,26 +365,6 @@ App = {
       this.btnConfirmPortfolio.addClass("disabled");
 
       console.log("About to create portfolio: ", App.createPortfolio);
-      /*let batch = new App.web3.BatchRequest();
-      for (let i = 0; i < App.createPortfolio.length; i++) {
-        batch.add(
-          await App.contracts.balancer.methods
-            .addPortfolioAsset(
-              this.createPortfolio[i].asset,
-              this.createPortfolio[i].value
-            )
-            .send.request({ from: App.metamaskAccountID })
-        );
-      }
-
-      // seal portfolio
-      batch.add(
-        await App.contracts.balancer.methods
-          .sealPortfolio()
-          .send.request({ from: App.metamaskAccountID })
-      );
-
-      await batch.execute();*/
       let assets = [];
       let percentages = [];
       for (let i = 0; i < App.createPortfolio.length; i++) {
@@ -392,7 +372,7 @@ App = {
         percentages.push(this.createPortfolio[i].value);
       }
       await App.contracts.balancer.methods
-        .createFullPortfolio(assets, percentages)
+        .createPortfolio(assets, percentages)
         .send({ from: App.metamaskAccountID });
 
       this.btnConfirmPortfolio.removeClass("disabled");
