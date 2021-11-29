@@ -2,8 +2,8 @@
 pragma solidity 0.8.6;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import './interfaces/IUniswapV2Router02.sol';
-import './interfaces/IERC20.sol';
+import "./interfaces/IUniswapV2Router02.sol";
+import "./interfaces/IERC20.sol";
 
 /**
  * @title Hold a user portfolio with multiple assets
@@ -11,43 +11,49 @@ import './interfaces/IERC20.sol';
  * @notice This is an experimental contract, don't use in production environment
  */
 contract Balancer is Ownable {
-
     // -----------------------------------------------
     // Properties
     // -----------------------------------------------
 
+    /// @notice uniswap router
     IUniswapV2Router02 public router;
 
     /// @notice Holds an account balance in the contract (not assigned to any asset in a portfolio)
-    mapping(address => uint) public balances;
+    mapping(address => uint256) public balances;
 
     /// @notice allowed assets that can be part of a portfolio (to be edited only by contract owner)
     address[] public allowedAssets;
 
     // @notice local store of asset prices
-    mapping(address => uint) public assetPrices;
+    mapping(address => uint256) public assetPrices;
 
     /// @notice the max amount of assets an account can add in a portfolio
     uint8 public constant MAX_PORTFOLIO_ASSETS = 10;
 
     struct Portfolio {
         State status;
-        mapping(address => uint) assetPercentages;
-        mapping(address => uint) assetBalances;
+        mapping(address => uint256) assetPercentages;
+        mapping(address => uint256) assetBalances;
         /// @dev this array make it easy to iterate over the portfolio assets
         address[] assets;
     }
 
-    enum State { Empty, Sealed, Initialized, Running }
+    /// @notice portfolio statuses
+    enum State {
+        Empty,
+        Sealed,
+        Initialized,
+        Running
+    }
 
     /// @notice Holds an account portfolio
     mapping(address => Portfolio) public portfolios;
 
-    uint public constant MIN_BALANCE_TO_CREATE_PORTFOLIO = 500000000000000000; // 0.5 ether
-    uint public constant MIN_BALANCE_TO_INITIALIZE_PORTFOLIO = 500000000000000000; // 0.5 ether
-    uint public constant MIN_BALANCE_TO_REBALANCE_PORTFOLIO = 20000000000000000; // 0.02 ether
+    uint256 public constant MIN_BALANCE_TO_CREATE_PORTFOLIO = 500000000000000000; // 0.5 ether
+    uint256 public constant MIN_BALANCE_TO_INITIALIZE_PORTFOLIO = 500000000000000000; // 0.5 ether
+    uint256 public constant MIN_BALANCE_TO_REBALANCE_PORTFOLIO = 20000000000000000; // 0.02 ether
 
-    uint public constant PORTFOLIO_INITIAL_GAS_RESERVE = 30000000000000000; // 0.03 ether
+    uint256 public constant PORTFOLIO_INITIAL_GAS_RESERVE = 30000000000000000; // 0.03 ether
 
     // -----------------------------------------------
     // Events
@@ -60,7 +66,7 @@ contract Balancer is Ownable {
     /// @notice Emitted when a new deposit is made
     /// @param accountAddress The deposit address
     /// @param amount The deposit amount
-    event LogDepositMade(address accountAddress, uint amount);
+    event LogDepositMade(address accountAddress, uint256 amount);
 
     /// @notice Emitted when a withdraw is made
     /// @param accountAddress The withdraw address
@@ -68,15 +74,19 @@ contract Balancer is Ownable {
     /// @param newBalance The new balance after the withdraw
     event LogWithdrawal(
         address accountAddress,
-        uint withdrawAmount,
-        uint newBalance
+        uint256 withdrawAmount,
+        uint256 newBalance
     );
 
     /// @notice Emitted when a new portfolio is created
-    /// @param accountAddress The withdraw address
+    /// @param accountAddress The portfolio owner address
     /// @param assets The assets address
     /// @param percentages The assigned percentage per asset (in order)
-    event LogPortfolioCreated(address accountAddress, address[] assets, uint[] percentages);
+    event LogPortfolioCreated(
+        address accountAddress,
+        address[] assets,
+        uint256[] percentages
+    );
 
     /// @notice Emitted when a portfolio is initialized
     /// @param accountAddress The account which performed the operation
@@ -97,7 +107,10 @@ contract Balancer is Ownable {
     /// @notice Check is a valid asset
     /// @param _assetAddress The address of the asset to check
     modifier isValidAsset(address _assetAddress) {
-        // TODO: check the address is a ERC20 token which supports 18 decimals
+        require(
+            IERC20(_assetAddress).decimals() == 18,
+            "Asset must support 18 decimals"
+        );
         _;
     }
 
@@ -105,7 +118,7 @@ contract Balancer is Ownable {
     /// @param _assetAddress The address of the token to be added
     modifier isNewAllowedAsset(address _assetAddress) {
         bool isNew = true;
-        for (uint i; i < allowedAssets.length; i++) {
+        for (uint256 i; i < allowedAssets.length; i++) {
             if (allowedAssets[i] == _assetAddress) {
                 isNew = false;
             }
@@ -118,8 +131,7 @@ contract Balancer is Ownable {
     // Methods
     // -----------------------------------------------
 
-    constructor (address _router) {
-        // uniswap router
+    constructor(address _router) {
         router = IUniswapV2Router02(_router);
     }
 
@@ -129,7 +141,7 @@ contract Balancer is Ownable {
     /// @notice Let the contract owner add new allowed tokens
     /// @param _assetAddress Token address
     function addAllowedAsset(address _assetAddress)
-    public
+    external
     isValidAsset(_assetAddress)
     isNewAllowedAsset(_assetAddress)
     onlyOwner
@@ -137,30 +149,33 @@ contract Balancer is Ownable {
         allowedAssets.push(_assetAddress);
         emit LogAllowedAssetAdded(_assetAddress);
     }
-    
+
     /// @return The allowed assets in the contract
-    function allowedAssetsList() public view returns (address[] memory) {
+    function allowedAssetsList() external view returns (address[] memory) {
         return allowedAssets;
     }
 
     /// @notice Reveal an account portfolio
     /// @param _accountAddress The portfolio account
     /// @return The account portfolio
-    function fetchPortfolio(address _accountAddress) public view returns
-    (
+    function fetchPortfolio(address _accountAddress)
+    external
+    view
+    returns (
         State,
         address[] memory,
-        uint[] memory,
-        uint[] memory
-    ) {
-        uint count = portfolios[_accountAddress].assets.length;
+        uint256[] memory,
+        uint256[] memory
+    )
+    {
+        uint256 count = portfolios[_accountAddress].assets.length;
 
         address assetAddress;
         address[] memory assets = new address[](count);
-        uint[] memory percentages = new uint[](count);
-        uint[] memory assetBalances = new uint[](count);
+        uint256[] memory percentages = new uint256[](count);
+        uint256[] memory assetBalances = new uint256[](count);
 
-        for (uint i = 0; i < count; i++) {
+        for (uint256 i = 0; i < count; i++) {
             assetAddress = portfolios[_accountAddress].assets[i];
             assets[i] = assetAddress;
             percentages[i] = portfolios[_accountAddress].assetPercentages[assetAddress];
@@ -168,23 +183,27 @@ contract Balancer is Ownable {
         }
 
         return (
-            portfolios[_accountAddress].status,
-            assets,
-            percentages,
-            assetBalances
+        portfolios[_accountAddress].status,
+        assets,
+        percentages,
+        assetBalances
         );
     }
 
     /// @notice Fetch the portfolio status
     /// @param _accountAddress The portfolio account
     /// @return Returns the status
-    function getPortfolioStatus(address _accountAddress) public view returns (State) {
+    function getPortfolioStatus(address _accountAddress)
+    external
+    view
+    returns (State)
+    {
         return portfolios[_accountAddress].status;
     }
 
     /// @notice Deposit ether in the contract
     /// @return The balance of the account after the deposit is made
-    function deposit() public payable returns (uint) {
+    function deposit() external payable returns (uint256) {
         require(msg.value > 0, "Deposit value must be grater than zero");
         balances[msg.sender] += msg.value;
         emit LogDepositMade(msg.sender, msg.value);
@@ -196,8 +215,11 @@ contract Balancer is Ownable {
     /// @dev This does not return any excess ether sent to it
     /// @param _withdrawAmount amount to withdraw
     /// @return The balance remaining for the account performing the operation
-    function withdraw(uint _withdrawAmount) public returns (uint) {
-        require(balances[msg.sender] >= _withdrawAmount, "Not enough funds to withdraw");
+    function withdraw(uint256 _withdrawAmount) external returns (uint256) {
+        require(
+            balances[msg.sender] >= _withdrawAmount,
+            "Not enough funds to withdraw"
+        );
         balances[msg.sender] -= _withdrawAmount;
         payable(msg.sender).transfer(_withdrawAmount);
 
@@ -207,9 +229,9 @@ contract Balancer is Ownable {
     }
 
     /// @notice Check if the asset is allowed for use in the contract
-    /// @param _assetAddress The address of the token to be added
+    /// @param _assetAddress The address to check
     function isAllowedAsset(address _assetAddress) private view returns (bool) {
-        for (uint i; i < allowedAssets.length; i++) {
+        for (uint256 i; i < allowedAssets.length; i++) {
             if (allowedAssets[i] == _assetAddress) {
                 return true;
             }
@@ -218,51 +240,94 @@ contract Balancer is Ownable {
         return false;
     }
 
+    /// @notice Check the asset does not exists in the portfolio
+    /// @param _assetAddress The address of the token to be added
+    function isNewPortfolioAsset(address _assetAddress)
+    private
+    view
+    returns (bool)
+    {
+        for (uint256 i = 0; i < portfolios[msg.sender].assets.length; i++) {
+            if (portfolios[msg.sender].assets[i] == _assetAddress) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// @notice Creates a portfolio and seal it (close it for changes)
     /// @dev The order is relevant: each percentage will be associated with the corresponding asset by order
     /// @param _assets Assets address (must be an allowed token)
     /// @param _percentages The allocation percentage for each asset
     function createPortfolio(
         address[] memory _assets,
-        uint[] memory _percentages)
-    external {
-        require(balances[msg.sender] >= MIN_BALANCE_TO_CREATE_PORTFOLIO, "Not enough funds to create portfolio");
-        require(portfolios[msg.sender].status == State.Empty, "Portfolio already created");
-        require(_assets.length <= MAX_PORTFOLIO_ASSETS, "Max amount of assets allowed");
+        uint256[] memory _percentages
+    ) external {
+        require(
+            balances[msg.sender] >= MIN_BALANCE_TO_CREATE_PORTFOLIO,
+            "Not enough funds to create portfolio"
+        );
+        require(
+            portfolios[msg.sender].status == State.Empty,
+            "Portfolio already created"
+        );
+        require(
+            _assets.length <= MAX_PORTFOLIO_ASSETS,
+            "Max amount of assets allowed"
+        );
         require(_assets.length >= 2, "The minimum amount of assets is 2");
-        require(_assets.length == _percentages.length, "Missing data for assets and percentages");
+        require(
+            _assets.length == _percentages.length,
+            "Missing data for assets and percentages"
+        );
+
+        // let's start by sealing the portfolio
+        portfolios[msg.sender].status = State.Sealed;
 
         // check total percentage integrity
-        uint total = 0;
-        for (uint i = 0; i < _percentages.length; i++) {
-            require(_percentages[i] >= 1 && _percentages[i] <= 99, "The percentage range per asset is 1 to 99");
+        uint256 total = 0;
+        for (uint256 i = 0; i < _percentages.length; i++) {
+            require(
+                _percentages[i] >= 1 && _percentages[i] <= 99,
+                "The percentage range per asset is 1 to 99"
+            );
             total += _percentages[i];
         }
 
         require(total == 100, "The sum of all the percentages must equal 100");
 
         // check assets integrity and add them to the portfolio
-        for (uint i = 0; i < _assets.length; i++) {
-            require(isAllowedAsset(_assets[i]), "Asset not allowed in portfolio");
+        for (uint256 i = 0; i < _assets.length; i++) {
+            require(
+                isAllowedAsset(_assets[i]),
+                "Asset not allowed in portfolio"
+            );
+            require(
+                isNewPortfolioAsset(_assets[i]),
+                "Asset already exists in portfolio"
+            );
             portfolios[msg.sender].assetPercentages[_assets[i]] = _percentages[i];
             portfolios[msg.sender].assets.push(_assets[i]);
         }
 
-        // finally, let's seal the portfolio
-        portfolios[msg.sender].status = State.Sealed;
-
         emit LogPortfolioCreated(msg.sender, _assets, _percentages);
     }
 
-    /// @notice Stop the portfolio rebalancing and return the assets balance to ether
-    function deletePortfolio() public {
-        require(portfolios[msg.sender].status != State.Empty, "There is no portfolio");
+    /// @notice Returns the assets balance to the account contract balance
+    function deletePortfolio() external {
+        require(
+            portfolios[msg.sender].status != State.Empty,
+            "There is no portfolio"
+        );
 
-        uint assetCount = portfolios[msg.sender].assets.length;
-        uint bought;
+        // let's start by updating the portfolio status to empty
+        portfolios[msg.sender].status = State.Empty;
+
+        uint256 assetCount = portfolios[msg.sender].assets.length;
+        uint256 bought;
         address assetAddress;
-        for (uint i = 0; i < assetCount; i++) {
-
+        for (uint256 i = 0; i < assetCount; i++) {
             assetAddress = portfolios[msg.sender].assets[i];
             if (portfolios[msg.sender].assetBalances[assetAddress] > 0) {
                 bought = swapTokensForETH(
@@ -279,29 +344,33 @@ contract Balancer is Ownable {
         }
 
         // safely remove portfolio assets
-        for (uint i = 0; i < assetCount; i++) {
+        for (uint256 i = 0; i < assetCount; i++) {
             portfolios[msg.sender].assets.pop();
         }
-
-        portfolios[msg.sender].status = State.Empty;
 
         emit LogPortfolioDeleted(msg.sender);
     }
 
     /// @notice Run the first asset distribution once the portfolio is sealed
-    function runInitialPortfolioDistribution() public {
-        require(balances[msg.sender] >= MIN_BALANCE_TO_INITIALIZE_PORTFOLIO, "Not enough funds to initialize portfolio");
-        require(portfolios[msg.sender].status == State.Sealed, "Portfolio must be sealed");
+    function runInitialPortfolioDistribution() external {
+        require(
+            balances[msg.sender] >= MIN_BALANCE_TO_INITIALIZE_PORTFOLIO,
+            "Not enough funds to initialize portfolio"
+        );
+        require(
+            portfolios[msg.sender].status == State.Sealed,
+            "Portfolio must be sealed"
+        );
 
         // change the portfolio status to initialized
         portfolios[msg.sender].status = State.Initialized;
 
-        uint initialBalance = balances[msg.sender] - PORTFOLIO_INITIAL_GAS_RESERVE;
-        uint percentage;
-        uint bought;
-        uint desiredAmountToSpend;
+        uint256 initialBalance = balances[msg.sender] - PORTFOLIO_INITIAL_GAS_RESERVE;
+        uint256 percentage;
+        uint256 bought;
+        uint256 desiredAmountToSpend;
         address _assetAddress;
-        for (uint i = 0; i < portfolios[msg.sender].assets.length; i++) {
+        for (uint256 i = 0; i < portfolios[msg.sender].assets.length; i++) {
             _assetAddress = portfolios[msg.sender].assets[i];
             percentage = portfolios[msg.sender].assetPercentages[_assetAddress];
             desiredAmountToSpend = (initialBalance * percentage) / 100;
@@ -325,9 +394,9 @@ contract Balancer is Ownable {
     /// @param _destTokenAddress The destination token address
     /// @param _amountIn The amount of ETH to exchange
     /// @return The amount of tokens bought
-    function swapETHForTokens(address _destTokenAddress, uint _amountIn)
-    public
-    returns (uint)
+    function swapETHForTokens(address _destTokenAddress, uint256 _amountIn)
+    private
+    returns (uint256)
     {
         /// @dev When using ether in the path, the WETH token address is needed because there is no address for ether ;)
         address origTokenAddress = router.WETH();
@@ -337,8 +406,7 @@ contract Balancer is Ownable {
         path[1] = _destTokenAddress;
 
         IERC20(origTokenAddress).approve(address(router), _amountIn);
-
-        uint[] memory minOuts = router.getAmountsOut(_amountIn, path);
+        uint256[] memory minOuts = router.getAmountsOut(_amountIn, path);
 
         router.swapExactETHForTokens{value: _amountIn}(
             minOuts[1],
@@ -354,9 +422,9 @@ contract Balancer is Ownable {
     /// @param _origTokenAddress The origin token address
     /// @param _amountIn The amount of tokens to exchange
     /// @return The amount of ETH bought
-    function swapTokensForETH(address _origTokenAddress, uint _amountIn)
-    public
-    returns (uint)
+    function swapTokensForETH(address _origTokenAddress, uint256 _amountIn)
+    private
+    returns (uint256)
     {
         address destTokenAddress = router.WETH();
 
@@ -365,8 +433,7 @@ contract Balancer is Ownable {
         path[1] = destTokenAddress;
 
         IERC20(_origTokenAddress).approve(address(router), _amountIn);
-
-        uint[] memory minOuts = router.getAmountsOut(_amountIn, path);
+        uint256[] memory minOuts = router.getAmountsOut(_amountIn, path);
 
         router.swapExactTokensForETH(
             _amountIn,
@@ -384,22 +451,24 @@ contract Balancer is Ownable {
     /// @dev TODO: create an asset price cache
     /// @param _token The asset address
     /// @return The asset price in wei
-    function getAssetPrice(address _token) public returns (uint)
-    {
-        uint amount = 10**18;
+    function getAssetPrice(address _token) public returns (uint256) {
+        uint256 amount = 10**18;
         address[] memory path = new address[](2);
         path[0] = router.WETH();
         path[1] = _token;
 
         IERC20(router.WETH()).approve(address(router), amount);
-        uint estimatedBuy = router.getAmountsOut(amount, path)[1];
+        uint256 estimatedBuy = router.getAmountsOut(amount, path)[1];
 
         return (10**18 * 10**18) / estimatedBuy;
     }
 
     /// @notice Runs a full portfolio rebalance
     function runPortfolioRebalance() external {
-        require(balances[msg.sender] >= MIN_BALANCE_TO_REBALANCE_PORTFOLIO, "Not enough balance to rebalance portfolio");
+        require(
+            balances[msg.sender] >= MIN_BALANCE_TO_REBALANCE_PORTFOLIO,
+            "Not enough balance to rebalance portfolio"
+        );
         require(
             portfolios[msg.sender].status == State.Initialized ||
             portfolios[msg.sender].status == State.Running,
@@ -411,17 +480,19 @@ contract Balancer is Ownable {
 
         // 1. update portfolio asset prices
         address assetAddress;
-        uint bought;
-        for (uint i = 0; i < portfolios[msg.sender].assets.length; i++) {
+        uint256 bought;
+        for (uint256 i = 0; i < portfolios[msg.sender].assets.length; i++) {
             assetAddress = portfolios[msg.sender].assets[i];
             assetPrices[assetAddress] = getAssetPrice(assetAddress);
         }
 
         // 2. calculate the new portfolio total value
-        uint currentHolding;
-        uint[] memory newHoldingValue = new uint[](portfolios[msg.sender].assets.length);
-        uint newPortfolioTotalBalance = 0;
-        for (uint i = 0; i < portfolios[msg.sender].assets.length; i++) {
+        uint256 currentHolding;
+        uint256[] memory newHoldingValue = new uint256[](
+            portfolios[msg.sender].assets.length
+        );
+        uint256 newPortfolioTotalBalance = 0;
+        for (uint256 i = 0; i < portfolios[msg.sender].assets.length; i++) {
             assetAddress = portfolios[msg.sender].assets[i];
 
             // get the current holding for the coin
@@ -432,29 +503,31 @@ contract Balancer is Ownable {
         }
 
         // 3. Prepare buy and sell orders
-        uint percentage;
-        int diff;
-        uint[] memory sellOrders = new uint[](portfolios[msg.sender].assets.length);
-        uint[] memory buyOrders = new uint[](portfolios[msg.sender].assets.length);
-        for (uint i = 0; i < portfolios[msg.sender].assets.length; i++) {
+        uint256 percentage;
+        int256 diff;
+        uint256[] memory sellOrders = new uint256[](
+            portfolios[msg.sender].assets.length
+        );
+        uint256[] memory buyOrders = new uint256[](
+            portfolios[msg.sender].assets.length
+        );
+        for (uint256 i = 0; i < portfolios[msg.sender].assets.length; i++) {
             assetAddress = portfolios[msg.sender].assets[i];
 
             // get current percentage
             percentage = portfolios[msg.sender].assetPercentages[assetAddress];
-            diff =
-            int((newPortfolioTotalBalance * percentage) / 100) -
-            int(newHoldingValue[i]);
+            diff = int256((newPortfolioTotalBalance * percentage) / 100) - int256(newHoldingValue[i]);
 
             if (diff > 0) {
-                buyOrders[i] = uint(diff);
+                buyOrders[i] = uint256(diff);
             } else {
-                sellOrders[i] = uint(-diff);
+                sellOrders[i] = uint256(-diff);
             }
         }
 
         // 4. Execute sell orders
-        uint amountToSwap;
-        for (uint i = 0; i < sellOrders.length; i++) {
+        uint256 amountToSwap;
+        for (uint256 i = 0; i < sellOrders.length; i++) {
             // TODO: do we need to do anything if sell amount is lower than the gas that will consume the operation?
             if (sellOrders[i] > 0) {
                 assetAddress = portfolios[msg.sender].assets[i];
@@ -467,7 +540,7 @@ contract Balancer is Ownable {
         }
 
         // 5. Execute buy orders
-        for (uint i = 0; i < buyOrders.length; i++) {
+        for (uint256 i = 0; i < buyOrders.length; i++) {
             // TODO: do we need to do anything if buy amount is lower than the gas that will consume the operation?
             if (buyOrders[i] > 0) {
                 assetAddress = portfolios[msg.sender].assets[i];
@@ -480,28 +553,25 @@ contract Balancer is Ownable {
             }
         }
 
-        // 6. Handle any remaining balance
-        // TODO: handle the gas reserve properly
-        //balances[msg.sender] += gasReserve;
-
         emit LogPortfolioRebalanced(msg.sender);
     }
 
-    function fetchAssetsPrices() external view returns (address[] memory, uint[] memory) {
+    /// @notice Return the last prices used for the existing assets
+    /// @dev note that the price could be zero if e asset was not used.
+    /// @return All the allowed asset last used prices
+    function fetchAssetsPrices()
+    external
+    view
+    returns (address[] memory, uint256[] memory)
+    {
         address[] memory assets = new address[](allowedAssets.length);
-        uint[] memory prices = new uint[](allowedAssets.length);
+        uint256[] memory prices = new uint256[](allowedAssets.length);
 
-        for (uint i; i < allowedAssets.length; i++) {
+        for (uint256 i; i < allowedAssets.length; i++) {
             assets[i] = allowedAssets[i];
             prices[i] = assetPrices[allowedAssets[i]];
         }
 
         return (assets, prices);
-    }
-
-    function updateAssetPrices() external {
-        for (uint i = 0; i < allowedAssets.length; i++) {
-            assetPrices[allowedAssets[i]] = getAssetPrice(allowedAssets[i]);
-        }
     }
 }
