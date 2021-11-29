@@ -67,9 +67,18 @@ contract Balancer is Ownable {
     );
 
     /// @notice Emitted when a new portfolio is created
+    /// @param accountAddress The withdraw address
     /// @param assets The assets address
     /// @param percentages The assigned percentage per asset (in order)
-    event LogPortfolioCreated(address[] assets, uint[] percentages);
+    event LogPortfolioCreated(address accountAddress, address[] assets, uint[] percentages);
+
+    /// @notice Emitted when a portfolio is initialized
+    /// @param accountAddress The account which performed the operation
+    event LogPortfolioInitialized(address accountAddress);
+
+    /// @notice Emitted when a portfolio was rebalanced
+    /// @param accountAddress The account which performed the operation
+    event LogPortfolioRebalanced(address accountAddress);
 
     /// @notice Emitted when a portfolio is deleted
     /// @param accountAddress The account which performed the operation
@@ -120,7 +129,6 @@ contract Balancer is Ownable {
     onlyOwner
     {
         allowedAssets.push(_assetAddress);
-
         emit LogAllowedAssetAdded(_assetAddress);
     }
     
@@ -138,8 +146,7 @@ contract Balancer is Ownable {
         address[] memory,
         uint[] memory,
         uint[] memory
-    )
-    {
+    ) {
         uint count = portfolios[_accountAddress].assets.length;
 
         address assetAddress;
@@ -186,7 +193,6 @@ contract Balancer is Ownable {
     function withdraw(uint _withdrawAmount) public returns (uint) {
         require(balances[msg.sender] >= _withdrawAmount, "Not enough funds");
         balances[msg.sender] -= _withdrawAmount;
-
         payable(msg.sender).transfer(_withdrawAmount);
 
         emit LogWithdrawal(msg.sender, _withdrawAmount, balances[msg.sender]);
@@ -231,7 +237,7 @@ contract Balancer is Ownable {
 
         // check assets integrity and add them to the portfolio
         for (uint i = 0; i < _assets.length; i++) {
-            require(isAllowedAsset(_assets[i]), "Asset not allowed");
+            require(isAllowedAsset(_assets[i]), "Asset not allowed in portfolio");
             portfolios[msg.sender].assetPercentages[_assets[i]] = _percentages[i];
             portfolios[msg.sender].assets.push(_assets[i]);
         }
@@ -239,7 +245,7 @@ contract Balancer is Ownable {
         // finally, let's seal the portfolio
         portfolios[msg.sender].status = State.Sealed;
 
-        emit LogPortfolioCreated(_assets, _percentages);
+        emit LogPortfolioCreated(msg.sender, _assets, _percentages);
     }
 
     /// @notice Stop the portfolio rebalancing and return the assets balance to ether
@@ -260,10 +266,16 @@ contract Balancer is Ownable {
                 // increment the account balance with the result of the assets sold
                 balances[msg.sender] += bought;
                 portfolios[msg.sender].assetBalances[assetAddress] = 0;
-                portfolios[msg.sender].assetPercentages[assetAddress] = 0;
             }
 
+            portfolios[msg.sender].assetPercentages[assetAddress] = 0;
+
             // delete the asset from the portfolio assets list
+            portfolios[msg.sender].assets.pop();
+        }
+
+        // this will make sure we don't have a remaining element
+        if (portfolios[msg.sender].assets.length == 1) {
             portfolios[msg.sender].assets.pop();
         }
 
@@ -276,6 +288,9 @@ contract Balancer is Ownable {
     function runInitialPortfolioDistribution() public {
         require(balances[msg.sender] > 0, "Not enough balance");
         require(portfolios[msg.sender].status == State.Sealed, "Portfolio must be sealed");
+
+        // change the portfolio status to initialized
+        portfolios[msg.sender].status = State.Initialized;
 
         uint initialBalance = balances[msg.sender];
         uint percentage;
@@ -294,10 +309,12 @@ contract Balancer is Ownable {
 
             bought = swapETHForTokens(_assetAddress, desiredAmountToSpend);
 
-            assetPrices[allowedAssets[i]] = (10**18 * desiredAmountToSpend) / bought;
+            assetPrices[_assetAddress] = (10**18 * desiredAmountToSpend) / bought;
             portfolios[msg.sender].assetBalances[_assetAddress] += bought;
             balances[msg.sender] -= desiredAmountToSpend;
         }
+
+        emit LogPortfolioInitialized(msg.sender);
     }
 
     /// @notice Swap ETH amount for tokens
@@ -376,9 +393,17 @@ contract Balancer is Ownable {
         return (10**18 * 10**18) / estimatedBuy;
     }
 
+    /// @notice Runs a full portfolio rebalance
     function runPortfolioRebalance() external {
 
-        require(portfolios[msg.sender].status == State.Initialized, "Portfolio must be initialized");
+        require(
+            portfolios[msg.sender].status == State.Initialized ||
+            portfolios[msg.sender].status == State.Running,
+            "Portfolio must be active"
+        );
+
+        // change the portfolio status to running
+        portfolios[msg.sender].status = State.Running;
 
         // 1. update portfolio asset prices
         address assetAddress;
@@ -431,6 +456,7 @@ contract Balancer is Ownable {
         // 4. Execute sell orders
         uint amountToSwap;
         for (uint i = 0; i < sellOrders.length; i++) {
+            // TODO: do we need to do anything if sell amount is lower than the gas that will consume the operation?
             if (sellOrders[i] > 0) {
                 assetAddress = portfolios[msg.sender].assets[i];
                 amountToSwap = (sellOrders[i] * 10**18) / assetPrices[assetAddress];
@@ -443,6 +469,7 @@ contract Balancer is Ownable {
 
         // 5. Execute buy orders
         for (uint i = 0; i < buyOrders.length; i++) {
+            // TODO: do we need to do anything if buy amount is lower than the gas that will consume the operation?
             if (buyOrders[i] > 0) {
                 assetAddress = portfolios[msg.sender].assets[i];
                 amountToSwap = buyOrders[i];
@@ -457,12 +484,13 @@ contract Balancer is Ownable {
         // 6. Handle any remaining balance
         // TODO: handle the gas reserve properly
         //balances[msg.sender] += gasReserve;
-    }
 
+        emit LogPortfolioRebalanced(msg.sender);
+    }
 
     // TO DELETE
 
-    function fetchAssetsPrices() public view returns (address[] memory, uint[] memory) {
+    function fetchAssetsPrices() external view returns (address[] memory, uint[] memory) {
         address[] memory assets = new address[](allowedAssets.length);
         uint[] memory prices = new uint[](allowedAssets.length);
 
