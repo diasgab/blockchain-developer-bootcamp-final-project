@@ -427,8 +427,6 @@ contract Balancer is Ownable {
             newPortfolioTotalBalance += newHoldingValue[i];
         }
 
-        // TODO: is the new balance is not that grater than the old balance, then stop!
-
         // 3. Prepare buy and sell orders
         uint gasReserve = 30000000000000000;
         newPortfolioTotalBalance = newPortfolioTotalBalance - gasReserve;
@@ -487,8 +485,6 @@ contract Balancer is Ownable {
 
         emit LogPortfolioRebalanced(msg.sender);
     }
-
-    // TO DELETE
 
     function fetchAssetsPrices() external view returns (address[] memory, uint[] memory) {
         address[] memory assets = new address[](allowedAssets.length);

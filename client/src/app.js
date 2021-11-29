@@ -1,3 +1,10 @@
+const Status = {
+  EMPTY: 0,
+  SEALED: 1,
+  INITIALIZED: 2,
+  RUNNING: 3,
+};
+
 App = {
   web3Provider: null,
   web3: null,
@@ -12,6 +19,7 @@ App = {
   userHasPortfolio: false,
   userHasPortfolioInit: false,
   balancerBalance: 0,
+  total: 0,
   hasExistingPortfolio: false,
   createPortfolioTotal: 0,
   createPortfolioCoins: [],
@@ -142,10 +150,10 @@ App = {
     else if (window.web3) {
       App.web3Provider = window.web3.currentProvider;
     }
-    // If no injected web3 instance is detected, fall back to Ganache
+    // If no injected web3 instance is detected, fall back to Ganache cli
     else {
       App.web3Provider = new Web3.providers.HttpProvider(
-        "http://localhost:7545"
+        "http://localhost:8545"
       );
     }
 
@@ -205,7 +213,7 @@ App = {
     );
   },
 
-  formatETH: async function (value) {
+  formatETH: function (value) {
     return Number(App.web3.utils.fromWei(value)).toFixed(4);
   },
 
@@ -231,9 +239,9 @@ App = {
     const assetPrices = await App.contracts.balancer.methods
       .fetchAssetsPrices()
       .call();
-    const isSealed = portfolio[0] ? "YES" : "NO";
-    this.userHasPortfolio = portfolio[0];
-    this.userHasPortfolioInit = portfolio[3][0] != 0;
+
+    this.userHasPortfolio = Number(portfolio[0]) != 0;
+    this.userHasPortfolioInit = Number(portfolio[0]) == 2 || Number(portfolio[0]) == 3;
     console.log("User has portfolio: ", this.userHasPortfolio);
 
     let price;
@@ -263,6 +271,8 @@ App = {
         balanceWithPrice: bal,
       };
     }
+
+    App.total = total;
 
     console.log("Full portfolio: ", this.assetAssignments);
     console.log("Total ", total.toString());
@@ -584,23 +594,20 @@ App = {
     let markup;
     this.assetAssignments.map((asset, i) => {
       markup =
-        "<tr>\n" +
-        '                <th scope="row">' +
+        '<tr><th scope="row">' +
         (i + 1) +
-        "</th>\n" +
-        "                <td>" +
+        "</th><td>" +
         App.fetchTokenSymbol(asset.address) +
-        "</td>\n" +
-        "                <td>" +
-        App.formatETH(asset.balanceWithPrice) +
-        " ETH</td>\n" +
-        "                <td>" +
+        "</td><td>" +
         asset.percentage +
-        "%</td>\n" +
-        "                <td>17%</td>\n" +
-        '                <td class="text-danger">-3%</td>\n' +
-        "                <td>Buy</td>\n" +
-        "              </tr>";
+        " %</td><td>" +
+        App.formatETH(asset.balance) +
+        "</td><td>" +
+        App.formatETH(asset.price) +
+        " ETH</td><td>" +
+        App.formatETH(asset.balanceWithPrice) +
+        " ETH</td></tr>"
+      ;
 
       rows.push(markup);
     });
@@ -611,6 +618,8 @@ App = {
     $.each(rows, function (index, row) {
       $table.children("tbody").append(row);
     });
+
+    $("#txtRebalancePortfolioTotalPrice").text(App.formatETH(App.total));
   },
 };
 

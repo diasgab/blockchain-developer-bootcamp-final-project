@@ -1,0 +1,45 @@
+body {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+}
+
+html {
+    height: -webkit-fill-available;
+}
+
+main {
+    display: flex;
+    flex-wrap: nowrap;
+    height: 100vh;
+    height: -webkit-fill-available;
+    max-height: 100vh;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.b-example-divider {
+    flex-shrink: 0;
+    width: 1px;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, .1);
+}
+
+.btn-toggle-nav a {
+    display: inline-flex;
+    padding: .1875rem .5rem;
+    margin-top: .125rem;
+    margin-left: 1.25rem;
+    text-decoration: none;
+}
+.btn-toggle-nav a:hover,
+.btn-toggle-nav a:focus {
+    background-color: #d2f4ea;
+}
+
+#anonMain {
+    margin-top: 3em;
+}
+
+.menu-active {
+    font-weight: bold;
+}
