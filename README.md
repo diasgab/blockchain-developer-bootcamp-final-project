@@ -80,6 +80,8 @@ To correct this manually the user might Sell a certain amount of the BAT token a
 
 To make the user life easier he could run a portfolio rebalance using this tool Then by using this tool.
 
+![MainScreen](./docs/images/main_screen.png)
+
 ## Simple workflow
 
 1. Enter balancer web site
