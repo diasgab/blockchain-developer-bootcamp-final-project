@@ -43,6 +43,12 @@ contract Balancer is Ownable {
     /// @notice Holds an account portfolio
     mapping(address => Portfolio) public portfolios;
 
+    uint public constant MIN_BALANCE_TO_CREATE_PORTFOLIO = 500000000000000000; // 0.5 ether
+    uint public constant MIN_BALANCE_TO_INITIALIZE_PORTFOLIO = 500000000000000000; // 0.5 ether
+    uint public constant MIN_BALANCE_TO_REBALANCE_PORTFOLIO = 20000000000000000; // 0.02 ether
+
+    uint public constant PORTFOLIO_INITIAL_GAS_RESERVE = 30000000000000000; // 0.03 ether
+
     // -----------------------------------------------
     // Events
     // -----------------------------------------------
@@ -191,7 +197,7 @@ contract Balancer is Ownable {
     /// @param _withdrawAmount amount to withdraw
     /// @return The balance remaining for the account performing the operation
     function withdraw(uint _withdrawAmount) public returns (uint) {
-        require(balances[msg.sender] >= _withdrawAmount, "Not enough funds");
+        require(balances[msg.sender] >= _withdrawAmount, "Not enough funds to withdraw");
         balances[msg.sender] -= _withdrawAmount;
         payable(msg.sender).transfer(_withdrawAmount);
 
@@ -220,7 +226,7 @@ contract Balancer is Ownable {
         address[] memory _assets,
         uint[] memory _percentages)
     external {
-        require(balances[msg.sender] > 0, "Not enough funds");
+        require(balances[msg.sender] >= MIN_BALANCE_TO_CREATE_PORTFOLIO, "Not enough funds to create portfolio");
         require(portfolios[msg.sender].status == State.Empty, "Portfolio already created");
         require(_assets.length <= MAX_PORTFOLIO_ASSETS, "Max amount of assets allowed");
         require(_assets.length >= 2, "The minimum amount of assets is 2");
@@ -252,9 +258,10 @@ contract Balancer is Ownable {
     function deletePortfolio() public {
         require(portfolios[msg.sender].status != State.Empty, "There is no portfolio");
 
+        uint assetCount = portfolios[msg.sender].assets.length;
         uint bought;
         address assetAddress;
-        for (uint i = 0; i < portfolios[msg.sender].assets.length; i++) {
+        for (uint i = 0; i < assetCount; i++) {
 
             assetAddress = portfolios[msg.sender].assets[i];
             if (portfolios[msg.sender].assetBalances[assetAddress] > 0) {
@@ -269,13 +276,10 @@ contract Balancer is Ownable {
             }
 
             portfolios[msg.sender].assetPercentages[assetAddress] = 0;
-
-            // delete the asset from the portfolio assets list
-            portfolios[msg.sender].assets.pop();
         }
 
-        // this will make sure we don't have a remaining element
-        if (portfolios[msg.sender].assets.length == 1) {
+        // safely remove portfolio assets
+        for (uint i = 0; i < assetCount; i++) {
             portfolios[msg.sender].assets.pop();
         }
 
@@ -286,13 +290,13 @@ contract Balancer is Ownable {
 
     /// @notice Run the first asset distribution once the portfolio is sealed
     function runInitialPortfolioDistribution() public {
-        require(balances[msg.sender] > 0, "Not enough balance");
+        require(balances[msg.sender] >= MIN_BALANCE_TO_INITIALIZE_PORTFOLIO, "Not enough funds to initialize portfolio");
         require(portfolios[msg.sender].status == State.Sealed, "Portfolio must be sealed");
 
         // change the portfolio status to initialized
         portfolios[msg.sender].status = State.Initialized;
 
-        uint initialBalance = balances[msg.sender];
+        uint initialBalance = balances[msg.sender] - PORTFOLIO_INITIAL_GAS_RESERVE;
         uint percentage;
         uint bought;
         uint desiredAmountToSpend;
@@ -395,7 +399,7 @@ contract Balancer is Ownable {
 
     /// @notice Runs a full portfolio rebalance
     function runPortfolioRebalance() external {
-
+        require(balances[msg.sender] >= MIN_BALANCE_TO_REBALANCE_PORTFOLIO, "Not enough balance to rebalance portfolio");
         require(
             portfolios[msg.sender].status == State.Initialized ||
             portfolios[msg.sender].status == State.Running,
@@ -428,9 +432,6 @@ contract Balancer is Ownable {
         }
 
         // 3. Prepare buy and sell orders
-        uint gasReserve = 30000000000000000;
-        newPortfolioTotalBalance = newPortfolioTotalBalance - gasReserve;
-
         uint percentage;
         int diff;
         uint[] memory sellOrders = new uint[](portfolios[msg.sender].assets.length);

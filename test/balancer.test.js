@@ -29,8 +29,11 @@ const createValidPortfolio = async (instance, userAccount, deposit) => {
 
 // error codes
 const ERR_NOT_OWNER = "Ownable: caller is not the owner";
-const ERR_NOT_ENOUGH_FUNDS = "Not enough funds";
-const ERR_NOT_ENOUGH_BALANCE = "Not enough balance";
+const ERR_ASSET_ALLOWED_ALREADY = "Asset is allowed already";
+const ERR_NOT_ENOUGH_FUNDS_TO_WITHDRAW = "Not enough funds to withdraw";
+const ERR_NOT_ENOUGH_BALANCE_TO_CREATE_PORTFOLIO = "Not enough funds to create portfolio";
+const ERR_NOT_ENOUGH_BALANCE_TO_INITIALIZE_PORTFOLIO = "Not enough funds to initialize portfolio";
+const ERR_NOT_ENOUGH_BALANCE_TO_REBALANCE_PORTFOLIO = "Not enough balance to rebalance portfolio";
 const ERR_PORTFOLIO_ASSETS_LENGTH_MISMATCH = "Missing data for assets and percentages";
 const ERR_ASSET_NOT_ALLOWED = "Asset not allowed in portfolio";
 const ERR_PORTFOLIO_ASSETS_LENGTH_MIN = "The minimum amount of assets is 2";
@@ -93,6 +96,16 @@ contract("Balancer", function (accounts) {
         const { error, reason } = getErrorObj(e.data);
         assert.equal(error, "revert");
         assert.equal(reason, ERR_NOT_OWNER);
+      }
+    });
+
+    it("should fail to add an existing allowed assets", async () => {
+      try {
+        await instance.addAllowedAsset(BAT_token, { from: contractOwner });
+      } catch (e) {
+        const { error, reason } = getErrorObj(e.data);
+        assert.equal(error, "revert");
+        assert.equal(reason, ERR_ASSET_ALLOWED_ALREADY);
       }
     });
 
@@ -167,7 +180,7 @@ contract("Balancer", function (accounts) {
       } catch (e) {
         const { error, reason } = getErrorObj(e.data);
         assert.equal(error, "revert");
-        assert.equal(reason, ERR_NOT_ENOUGH_FUNDS);
+        assert.equal(reason, ERR_NOT_ENOUGH_FUNDS_TO_WITHDRAW);
       }
     });
 
@@ -205,7 +218,8 @@ contract("Balancer", function (accounts) {
       assert.equal(portfolioStatus.toNumber(), Status.SEALED, "portfolio should be sealed");
     });
 
-    it("should fail to create a portfolio if the account has no funds", async () => {
+    it("should fail to create a portfolio if the account has not enough funds", async () => {
+      await instance.deposit({ from: userAccount, value: web3.utils.toWei("0.49", "ether") });
       let assets = [UNI_token, BAT_token];
       let percentages = [60, 40];
 
@@ -214,7 +228,7 @@ contract("Balancer", function (accounts) {
       } catch (e) {
         const { error, reason } = getErrorObj(e.data);
         assert.equal(error, "revert");
-        assert.equal(reason, ERR_NOT_ENOUGH_FUNDS);
+        assert.equal(reason, ERR_NOT_ENOUGH_BALANCE_TO_CREATE_PORTFOLIO);
       }
     });
 
@@ -369,12 +383,13 @@ contract("Balancer", function (accounts) {
     });
 
     it("should fail to run the initial distribution if account has not enough balance", async () => {
+      await instance.deposit({ from: userAccount, value: web3.utils.toWei("0.49", "ether") });
       try {
         await instance.runInitialPortfolioDistribution({ from: userAccount });
       } catch (e) {
         const { error, reason } = getErrorObj(e.data);
         assert.equal(error, "revert");
-        assert.equal(reason, ERR_NOT_ENOUGH_BALANCE);
+        assert.equal(reason, ERR_NOT_ENOUGH_BALANCE_TO_INITIALIZE_PORTFOLIO);
       }
     });
 
@@ -390,16 +405,13 @@ contract("Balancer", function (accounts) {
       }
     });
 
-    it("should leave the balance in 0 after running the initial distribution", async () => {
+    it("should leave the balance with reserves after running the initial distribution", async () => {
       await createValidPortfolio(instance, userAccount, deposit);
       await instance.runInitialPortfolioDistribution({ from: userAccount });
       const balance = await instance.balances(userAccount);
+      const initialGasReserve = await instance.PORTFOLIO_INITIAL_GAS_RESERVE();
 
-      assert.equal(
-        balance,
-        0,
-        "balance should be 0"
-      );
+      assert.equal(balance.toString(), initialGasReserve.toString(), "balance should be equal to the initial gas reserve")
     });
 
     it("should move the account balance to the portfolio balance after running the initial distribution", async () => {
@@ -434,6 +446,10 @@ contract("Balancer", function (accounts) {
       const portfolioStatus = await instance.getPortfolioStatus(userAccount);
 
       assert.equal(portfolioStatus.toNumber(), Status.RUNNING, "portfolio should be running");
+    });
+
+    it("TODO: should fail to run a rebalance if account has not enough balance", async () => {
+
     });
 
     it("should fail to run a rebalance if the portfolio is not initialized or running", async () => {
