@@ -90,6 +90,10 @@ To make the user life easier he could run a portfolio rebalance using this tool 
 - Make sure your Metamask localhost network is in port `8545` and chain id is `1337`.
 - If you get `TXRejectedError` when sending a transaction, reset your Metamask account from Advanced settings.
 
+## Experimental
+
+- If you want to test a more "real case scenario" you could simulate a price change of a token by buying a huge amount of it using uniswap router. This would work only in local environment: 
+- From the truffle console execute: `truffle(rinkebylocal)> exec scripts/buyer_simulator.js`
 
 ## Simple workflow
 
