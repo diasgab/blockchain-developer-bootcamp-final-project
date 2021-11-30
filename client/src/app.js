@@ -5,132 +5,54 @@ const Status = {
   RUNNING: 3,
 };
 
+const tokenSymbols = {
+  "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984": "UNI",
+  "0xbF7A7169562078c96f0eC1A8aFD6aE50f12e5A99": "BAT",
+}
+
+function fetchTokenSymbol (address) {
+  return tokenSymbols[address] ?? "Undefined";
+}
+
+function fetchTokenAddress (name) {
+  return Object.keys(tokenSymbols).find(
+    (key) => tokenSymbols[key] === name
+  );
+}
+
+function shortenAddress (address, num = 3) {
+  if (!address) return "";
+  return (
+    !!address &&
+    `${address.substring(0, num + 2)}...${address.substring(
+      address.length - num - 1
+    )}`
+  );
+}
+
 App = {
   web3Provider: null,
   web3: null,
   contracts: {},
-  emptyAddress: "0x0000000000000000000000000000000000000000",
   metamaskAccountID: "",
   metamaskAccountBalance: "0",
   metamaskAccountNetwork: "",
-  ownerID: "0x0000000000000000000000000000000000000000",
-  userAccountID: "0x0000000000000000000000000000000000000000",
-  userHasBalancerBalance: false,
-  userHasPortfolio: false,
-  userHasPortfolioInit: false,
-  balancerBalance: 0,
-  total: 0,
-  hasExistingPortfolio: false,
-  createPortfolioTotal: 0,
-  createPortfolioCoins: [],
-  allowedTokens: [],
-  createPortfolio: [],
-  assetAssignments: [],
-  screens: [
-    "depositScreen",
-    "withdrawScreen",
-    "createPortfolioScreen",
-    "managePortfolioScreen",
-    "deletePortfolioScreen",
-  ],
-  tokenSymbols: {
-    "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984": "UNI",
-    "0xbF7A7169562078c96f0eC1A8aFD6aE50f12e5A99": "BAT",
-  },
+  userPortfolioStatus: Status.EMPTY,
 
-  // elements
-  anonMain: null,
-  connectedMain: null,
-  topNavbar: null,
-  navEthNetwork: null,
-  navEthBalance: null,
-  navEthAddress: null,
-  txtBalancerBalance: null,
-  liMenuDeposit: null,
-  liMenuPortfolio: null,
-  liMenuCreatePortfolio: null,
-  liMenuManagePortfolio: null,
-  liMenuDeletePortfolio: null,
-  liMenuWithdraw: null,
-  btnMenuDeposit: null,
-  btnMenuCreatePortfolio: null,
-  btnMenuManagePortfolio: null,
-  btnMenuDeletePortfolio: null,
-  btnMenuWithdraw: null,
-  depositScreen: null,
-  createPortfolioScreen: null,
-  managePortfolioScreen: null,
-  deletePortfolioScreen: null,
-  withdrawScreen: null,
-  btnDeposit: null,
-  inputDepositAmount: null,
-  createPortfolioTable: null,
-  txtCreatePortfolioTotal: null,
-  btnConfirmPortfolio: null,
-  managePortfolioTable: null,
-  btnRunPortfolioRebalance: null,
-  btnDeletePortfolio: null,
-  btnWithdraw: null,
-  inputWithdrawAmount: null,
+  // user balance in the contract (not in the portfolio)
+  userBalancerBalance: 0,
+  allowedTokens: [],
+  // holds the portfolio data for creation
+  createPortfolio: [],
+  createdPortfolioTotal: 0,
+  assetAssignments: [],
+  createPortfolioCoins: [],
 
   init: async function () {
-    App.readElements();
     App.setInitialState();
+    await App.bindEvents();
 
     return await App.initWeb3();
-  },
-
-  readElements: function () {
-    // main containers
-    this.anonMain = $("#anonMain");
-    this.connectedMain = $("#connectedMain");
-
-    // top navbar
-    this.topNavbar = $("#topNavbar");
-    this.navEthNetwork = $("#navEthNetwork");
-    this.navEthBalance = $("#navEthBalance");
-    this.navEthAddress = $("#navEthAddress");
-
-    // menu
-    this.txtBalancerBalance = $("#txtBalancerBalance");
-    this.liMenuDeposit = $("#liMenuDeposit");
-    this.liMenuPortfolio = $("#liMenuPortfolio");
-    this.liMenuCreatePortfolio = $("#liMenuCreatePortfolio");
-    this.liMenuManagePortfolio = $("#liMenuManagePortfolio");
-    this.liMenuDeletePortfolio = $("#liMenuDeletePortfolio");
-    this.liMenuWithdraw = $("#liMenuWithdraw");
-    this.btnMenuDeposit = $("#btnMenuDeposit");
-    this.btnMenuCreatePortfolio = $("#btnMenuCreatePortfolio");
-    this.btnMenuManagePortfolio = $("#btnMenuManagePortfolio");
-    this.btnMenuDeletePortfolio = $("#btnMenuDeletePortfolio");
-    this.btnMenuWithdraw = $("#btnMenuWithdraw");
-
-    // screens
-    this.depositScreen = $("#depositScreen");
-    this.createPortfolioScreen = $("#createPortfolioScreen");
-    this.managePortfolioScreen = $("#managePortfolioScreen");
-    this.deletePortfolioScreen = $("#deletePortfolioScreen");
-    this.withdrawScreen = $("#withdrawScreen");
-
-    // deposit
-    this.btnDeposit = $("#btnDeposit");
-    this.inputDepositAmount = $("#inputDepositAmount");
-
-    // portfolio create
-    this.createPortfolioTable = $("#createPortfolioTable");
-    this.txtCreatePortfolioTotal = $("#txtCreatePortfolioTotal");
-    this.btnConfirmPortfolio = $("#btnConfirmPortfolio");
-
-    // portfolio manage
-    this.managePortfolioTable = $("#managePortfolioTable");
-    this.btnRunPortfolioRebalance = $("#btnRunPortfolioRebalance");
-
-    // portfolio delete
-    this.btnDeletePortfolio = $("#btnDeletePortfolio");
-
-    // withdraw
-    this.btnWithdraw = $("#btnWithdraw");
-    this.inputWithdrawAmount = $("#inputWithdrawAmount");
   },
 
   initWeb3: async function () {
@@ -157,12 +79,7 @@ App = {
       );
     }
 
-    await App.getMetamaskAccountID();
-    if (App.metamaskAccountID.length != 0) {
-      await App.initBalancerContract();
-      await App.loadUserPortfolio();
-      return App.showConnectedAccount();
-    }
+    return await App.getMetamaskAccountID();
   },
 
   getMetamaskAccountID: async function () {
@@ -200,6 +117,15 @@ App = {
     console.log("metamaskAccountID:", App.metamaskAccountID);
     console.log("metamaskAccountBalance:", App.metamaskAccountBalance);
     console.log("metamaskAccountBalance:", App.metamaskAccountNetwork);
+
+    if (App.metamaskAccountID.length != 0) {
+      await App.initBalancerContract();
+      await App.loadUserPortfolio();
+
+      return App.showConnectedAccount();
+    }
+
+    return App.showAnonAccount();
   },
 
   initBalancerContract: async function () {
@@ -223,8 +149,8 @@ App = {
         .balances(App.metamaskAccountID)
         .call()
     ).toString();
-    App.balancerBalance = Number(App.web3.utils.fromWei(balance)).toFixed(4);
-    console.log("Balancer balance: " + App.balancerBalance);
+    App.userBalancerBalance = Number(App.web3.utils.fromWei(balance)).toFixed(4);
+    console.log("User balancer balance: " + App.userBalancerBalance);
 
     await App.loadUserFullPortfolio();
 
@@ -240,9 +166,8 @@ App = {
       .fetchAssetsPrices()
       .call();
 
-    this.userHasPortfolio = Number(portfolio[0]) != 0;
-    this.userHasPortfolioInit = Number(portfolio[0]) == 2 || Number(portfolio[0]) == 3;
-    console.log("User has portfolio: ", this.userHasPortfolio);
+    App.userPortfolioStatus = Number(portfolio[0]);
+    console.log("User portfolio status: ", App.userPortfolioStatus);
 
     let price;
     let bal;
@@ -272,120 +197,140 @@ App = {
       };
     }
 
-    App.total = total;
+    App.createdPortfolioTotal = total;
 
     console.log("Full portfolio: ", this.assetAssignments);
     console.log("Total ", total.toString());
   },
 
   showScreen: function (screen) {
-    for (let i = 0; i < this.screens.length; i++) {
-      if (this.screens[i] == screen) {
-        $("#" + this.screens[i]).show();
+    let screens = [
+      "depositScreen",
+      "withdrawScreen",
+      "createPortfolioScreen",
+      "managePortfolioScreen",
+      "deletePortfolioScreen",
+    ]
+
+    for (let i = 0; i < screens.length; i++) {
+      if (screens[i] == screen) {
+        $("#" + screens[i]).show();
       } else {
-        $("#" + this.screens[i]).hide();
+        $("#" + screens[i]).hide();
       }
     }
   },
 
-  setInitialState: async function () {
-    this.anonMain.hide();
-    this.connectedMain.hide();
-    this.topNavbar.hide();
+  /**
+   * Set the app initial state
+   */
+  setInitialState: function () {
+    $("#anonMain").hide();
+    $("#connectedMain").hide();
+    $("#topNavbar").hide();
+    $("#btnDeposit").addClass("disabled");
+    $("#btnWithdraw").addClass("disabled");
+  },
 
-    this.btnMenuDeposit.on("click", async (e) => {
+  /**
+   * Declare all the binding events for each app element
+   */
+  bindEvents: async function () {
+    $("#btnMenuDeposit").on("click", async (e) => {
       e.preventDefault();
       this.showScreen("depositScreen");
     });
 
-    this.btnMenuWithdraw.on("click", async (e) => {
+    $("#btnMenuWithdraw").on("click", async (e) => {
       e.preventDefault();
       this.showScreen("withdrawScreen");
     });
 
-    this.btnMenuCreatePortfolio.on("click", async (e) => {
+    $("#btnMenuCreatePortfolio").on("click", async (e) => {
       e.preventDefault();
       this.showScreen("createPortfolioScreen");
     });
 
-    this.btnMenuManagePortfolio.on("click", async (e) => {
+    $("#btnMenuManagePortfolio").on("click", async (e) => {
       e.preventDefault();
       this.showScreen("managePortfolioScreen");
     });
 
-    this.btnMenuDeletePortfolio.on("click", async (e) => {
+    $("#btnMenuDeletePortfolio").on("click", async (e) => {
       e.preventDefault();
       this.showScreen("deletePortfolioScreen");
     });
 
-    this.btnDeposit.addClass("disabled");
-    this.inputDepositAmount.on("keyup", (value) => {
+    const btnDeposit = $("#btnDeposit");
+    $("#inputDepositAmount").on("keyup", (value) => {
       // TODO: validate the input amount is a valid number
       if (value.target.value > 0) {
-        this.btnDeposit.removeClass("disabled");
+        btnDeposit.removeClass("disabled");
       } else {
-        this.btnDeposit.addClass("disabled");
+        btnDeposit.addClass("disabled");
       }
     });
 
-    this.btnWithdraw.addClass("disabled");
-    this.inputWithdrawAmount.on("keyup", (value) => {
-      // TODO: validate the input amount is a valid number
-      if (value.target.value > 0) {
-        this.btnWithdraw.removeClass("disabled");
-      } else {
-        this.btnWithdraw.addClass("disabled");
-      }
-    });
-
-    this.btnDeposit.on("click", async (e) => {
+    btnDeposit.on("click", async (e) => {
       e.preventDefault();
-      this.btnDeposit.addClass("disabled");
-      let depositValue = App.inputDepositAmount.val();
+      btnDeposit.addClass("disabled");
+      let depositValue = $("#inputDepositAmount").val();
       await App.contracts.balancer.methods.deposit().send({
         from: App.metamaskAccountID,
         value: App.web3.utils.toWei(depositValue, "ether"),
       });
 
-      this.btnDeposit.removeClass("disabled");
-      App.inputDepositAmount.val("");
+      btnDeposit.removeClass("disabled");
+      $("#inputDepositAmount").val("");
 
       // on success
       await App.loadUserPortfolio();
       App.showConnectedAccount();
     });
 
-    this.btnWithdraw.on("click", async (e) => {
+    const btnWithdraw = $("#btnWithdraw");
+    $("#inputWithdrawAmount").on("keyup", (value) => {
+      // TODO: validate the input amount is a valid number
+      if (value.target.value > 0) {
+        btnWithdraw.removeClass("disabled");
+      } else {
+        btnWithdraw.addClass("disabled");
+      }
+    });
+
+    btnWithdraw.on("click", async (e) => {
       e.preventDefault();
-      this.btnWithdraw.addClass("disabled");
-      let withdrawValue = App.inputWithdrawAmount.val();
+      btnWithdraw.addClass("disabled");
+      let withdrawValue = $("#inputWithdrawAmount").val();
       await App.contracts.balancer.methods
         .withdraw(App.web3.utils.toWei(withdrawValue, "ether"))
         .send({ from: App.metamaskAccountID });
 
-      this.btnWithdraw.removeClass("disabled");
-      App.inputWithdrawAmount.val("");
+      btnWithdraw.removeClass("disabled");
+      $("#inputWithdrawAmount").val("");
 
       await App.loadUserPortfolio();
       App.showConnectedAccount();
     });
 
-    this.btnConfirmPortfolio.on("click", async (e) => {
+    const btnConfirmPortfolio = $("#btnConfirmPortfolio");
+    btnConfirmPortfolio.on("click", async (e) => {
       e.preventDefault();
-      this.btnConfirmPortfolio.addClass("disabled");
+      btnConfirmPortfolio.addClass("disabled");
 
       console.log("About to create portfolio: ", App.createPortfolio);
       let assets = [];
       let percentages = [];
       for (let i = 0; i < App.createPortfolio.length; i++) {
-        assets.push(this.createPortfolio[i].asset);
-        percentages.push(this.createPortfolio[i].value);
+        assets.push(App.createPortfolio[i].asset);
+        percentages.push(App.createPortfolio[i].value);
       }
+
       await App.contracts.balancer.methods
         .createPortfolio(assets, percentages)
         .send({ from: App.metamaskAccountID });
 
-      this.btnConfirmPortfolio.removeClass("disabled");
+      btnConfirmPortfolio.removeClass("disabled");
 
       await App.loadUserPortfolio();
       App.showConnectedAccount();
@@ -431,51 +376,54 @@ App = {
     });
   },
 
-  shortenAddress: function (address, num = 3) {
-    if (!address) return "";
-    return (
-      !!address &&
-      `${address.substring(0, num + 2)}...${address.substring(
-        address.length - num - 1
-      )}`
-    );
-  },
-
   showUserBalancerBalance: function () {
-    this.txtBalancerBalance.text(App.balancerBalance + " ETH");
+    $("#txtBalancerBalance").text(App.userBalancerBalance + " ETH");
   },
 
   isNewUser: function () {
-    return App.balancerBalance == "0.0000" && !this.userHasPortfolio;
+    return App.userBalancerBalance == "0.0000" && App.userPortfolioStatus == Status.EMPTY;
+  },
+
+  showAnonAccount: function () {
+    $("#anonMain").show();
+    $("#connectedMain").hide();
+    $("#topNavbar").hide();
   },
 
   showConnectedAccount: function () {
-    this.anonMain.hide();
-    this.connectedMain.show();
-    this.topNavbar.show();
+    $("#anonMain").hide();
+    $("#connectedMain").show();
+    $("#topNavbar").show();
 
-    this.navEthNetwork.text(App.metamaskAccountNetwork);
-    this.navEthBalance.text(App.metamaskAccountBalance + " ETH");
-    this.navEthAddress.text(this.shortenAddress(App.metamaskAccountID));
+    $("#navEthNetwork").text(App.metamaskAccountNetwork);
+    $("#navEthBalance").text(App.metamaskAccountBalance + " ETH");
+    $("#navEthAddress").text(shortenAddress(App.metamaskAccountID));
+
+    const liMenuDeposit = $("#liMenuDeposit");
+    const liMenuPortfolio = $("#liMenuPortfolio");
+    const liMenuCreatePortfolio = $("#liMenuCreatePortfolio");
+    const liMenuManagePortfolio = $("#liMenuManagePortfolio");
+    const liMenuDeletePortfolio = $("#liMenuDeletePortfolio");
+    const liMenuWithdraw = $("#liMenuWithdraw");
 
     if (App.isNewUser()) {
-      this.liMenuDeposit.show();
-      this.liMenuPortfolio.hide();
-      this.liMenuWithdraw.hide();
+      liMenuDeposit.show();
+      liMenuPortfolio.hide();
+      liMenuWithdraw.hide();
       App.showUserBalancerBalance();
       this.showScreen("depositScreen");
     } else {
       App.showUserBalancerBalance();
-      this.liMenuDeposit.hide();
-      this.liMenuPortfolio.show();
-      if (!this.userHasPortfolio) {
+      liMenuDeposit.hide();
+      liMenuPortfolio.show();
+      if (App.userPortfolioStatus == Status.EMPTY) {
         App.displayCreatePortfolioForm();
         this.showScreen("createPortfolioScreen");
-        this.liMenuCreatePortfolio.show();
-        this.liMenuManagePortfolio.hide();
-        this.liMenuDeletePortfolio.hide();
+        liMenuCreatePortfolio.show();
+        liMenuManagePortfolio.hide();
+        liMenuDeletePortfolio.hide();
       } else {
-        if (this.userHasPortfolioInit) {
+        if (App.userPortfolioStatus == Status.RUNNING) {
           $("#containerRebalancePortfolio").show();
           $("#containerInitPortfolio").hide();
           App.displayManagePortfolioForm();
@@ -486,22 +434,12 @@ App = {
         }
 
         this.showScreen("managePortfolioScreen");
-        this.liMenuCreatePortfolio.hide();
-        this.liMenuManagePortfolio.show();
-        this.liMenuDeletePortfolio.show();
+        liMenuCreatePortfolio.hide();
+        liMenuManagePortfolio.show();
+        liMenuDeletePortfolio.show();
       }
-      this.liMenuWithdraw.show();
+      liMenuWithdraw.show();
     }
-  },
-
-  fetchTokenSymbol: function (address) {
-    return App.tokenSymbols[address] ?? "Undefined";
-  },
-
-  fetchTokenAddress: function (name) {
-    return Object.keys(App.tokenSymbols).find(
-      (key) => App.tokenSymbols[key] === name
-    );
   },
 
   displayCreatePortfolioForm: async function () {
@@ -521,7 +459,7 @@ App = {
         '<tr><th scope="row">' +
         (index + 1) +
         "</th><td>" +
-        App.fetchTokenSymbol(name) +
+        fetchTokenSymbol(name) +
         '</td><td><div class="input-group">' +
         '<input type="text" class="form-control" class="percentage" onKeyUp="App.sum(' +
         index +
@@ -536,28 +474,29 @@ App = {
     $.each(rows, function (index, row) {
       $table.children("tbody").append(row);
     });
-
-    //return App.bindEvents();
   },
 
   sum: function (index, value) {
-    this.createPortfolioCoins[index] = Number(value);
+    console.log("QUE PASO");
 
-    this.createPortfolioTotal = 0;
-    for (let i = 0; i < this.createPortfolioCoins.length; i++) {
+    App.createPortfolioCoins[index] = Number(value);
+
+    let createPortfolioTotal = 0;
+    for (let i = 0; i < App.createPortfolioCoins.length; i++) {
       App.createPortfolio[i] = {
         asset: App.allowedTokens[i],
-        value: this.createPortfolioCoins[i],
+        value: App.createPortfolioCoins[i],
       };
-      this.createPortfolioTotal += this.createPortfolioCoins[i];
+
+      createPortfolioTotal += App.createPortfolioCoins[i];
     }
 
-    App.txtCreatePortfolioTotal.text(this.createPortfolioTotal);
+    $("#txtCreatePortfolioTotal").text(createPortfolioTotal);
 
-    if (this.createPortfolioTotal == 100) {
-      this.btnConfirmPortfolio.removeClass("disabled");
+    if (createPortfolioTotal == 100) {
+      $("#btnConfirmPortfolio").removeClass("disabled");
     } else {
-      this.btnConfirmPortfolio.addClass("disabled");
+      $("#btnConfirmPortfolio").addClass("disabled");
     }
   },
 
@@ -571,7 +510,7 @@ App = {
         (i + 1) +
         "</th>" +
         "<td>" +
-        App.fetchTokenSymbol(asset.address) +
+        fetchTokenSymbol(asset.address) +
         "</td>\n" +
         "<td>" +
         asset.percentage +
@@ -597,7 +536,7 @@ App = {
         '<tr><th scope="row">' +
         (i + 1) +
         "</th><td>" +
-        App.fetchTokenSymbol(asset.address) +
+        fetchTokenSymbol(asset.address) +
         "</td><td>" +
         asset.percentage +
         " %</td><td>" +
@@ -619,7 +558,7 @@ App = {
       $table.children("tbody").append(row);
     });
 
-    $("#txtRebalancePortfolioTotalPrice").text(App.formatETH(App.total));
+    $("#txtRebalancePortfolioTotalPrice").text(App.formatETH(App.createdPortfolioTotal));
   },
 };
 
