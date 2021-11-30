@@ -103,9 +103,11 @@ App = {
 
     // Retrieving accounts
     let userAccount = "";
+    let balance = 0;
     try {
       const accounts = await App.web3.eth.getAccounts();
       userAccount = accounts[0];
+      balance = await App.web3.eth.getBalance(userAccount);
     } catch (error) {
         // User denied account access...
         console.error("User denied account access: ");
@@ -123,7 +125,6 @@ App = {
       return App.showAnonAccount();
     }
 
-    let balance = await App.web3.eth.getBalance(userAccount);
     App.metamaskAccountID = userAccount;
     App.metamaskAccountBalance = Number(
       App.web3.utils.fromWei(balance, "ether")
@@ -215,6 +216,12 @@ App = {
   },
 
   loadUserFullPortfolio: async function () {
+
+    let balance = await App.web3.eth.getBalance(App.metamaskAccountID);
+    App.metamaskAccountBalance = Number(
+      App.web3.utils.fromWei(balance, "ether")
+    ).toFixed(4);
+
     const portfolio = await App.contracts.balancer.methods
       .fetchPortfolio(App.metamaskAccountID)
       .call();
@@ -366,14 +373,14 @@ App = {
         return
       }
 
+      // on success
+      await App.loadUserPortfolio();
+      App.showConnectedAccount();
+
       btnDeposit.removeClass("disabled");
       btnDeposit.text("Deposit");
       $("#depositLoading").hide();
       $("#inputDepositAmount").val("");
-
-      // on success
-      await App.loadUserPortfolio();
-      App.showConnectedAccount();
     });
 
     const btnWithdraw = $("#btnWithdraw");
@@ -420,13 +427,13 @@ App = {
         return;
       }
 
+      await App.loadUserPortfolio();
+      App.showConnectedAccount();
+
       btnWithdraw.removeClass("disabled");
       btnWithdraw.text("Withdraw");
       $("#inputWithdrawAmount").val("");
       $("#withdrawLoading").hide();
-
-      await App.loadUserPortfolio();
-      App.showConnectedAccount();
     });
 
     const btnConfirmPortfolio = $("#btnConfirmPortfolio");
@@ -465,12 +472,12 @@ App = {
         return;
       }
 
+      await App.loadUserPortfolio();
+      App.showConnectedAccount();
+
       btnConfirmPortfolio.removeClass("disabled");
       btnConfirmPortfolio.text("Confirm");
       $("#createLoading").hide();
-
-      await App.loadUserPortfolio();
-      App.showConnectedAccount();
     });
 
     const btnRunInitPortfolio = $("#btnRunInitPortfolio");
@@ -502,12 +509,12 @@ App = {
         return;
       }
 
+      await App.loadUserPortfolio();
+      App.showConnectedAccount();
+
       btnRunInitPortfolio.removeClass("disabled");
       btnRunInitPortfolio.text("Run Initial Portfolio distribution");
       $("#initLoading").hide();
-
-      await App.loadUserPortfolio();
-      App.showConnectedAccount();
     });
 
     const btnRunPortfolioRebalance = $("#btnRunPortfolioRebalance");
@@ -539,12 +546,12 @@ App = {
         return;
       }
 
+      await App.loadUserPortfolio();
+      App.showConnectedAccount();
+
       $("#btnRunPortfolioRebalance").removeClass("disabled");
       btnRunPortfolioRebalance.text("Run Portfolio Rebalance");
       $("#rebalanceLoading").hide();
-
-      await App.loadUserPortfolio();
-      App.showConnectedAccount();
     });
 
     const btnDeletePortfolio = $("#btnDeletePortfolio");
@@ -571,12 +578,12 @@ App = {
         return;
       }
 
+      await App.loadUserPortfolio();
+      App.showConnectedAccount();
+
       btnDeletePortfolio.removeClass("disabled");
       btnDeletePortfolio.text("Delete");
       $("#deleteLoading").hide();
-
-      await App.loadUserPortfolio();
-      App.showConnectedAccount();
     });
   },
 
