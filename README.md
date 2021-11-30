@@ -6,7 +6,7 @@ https://elastic-pare-e13eee.netlify.app
 
 ## Screencast link
 
-PENDING
+https://youtu.be/UwQDh8XCA-c
 
 ## Public Ethereum wallet for certification:
 
