@@ -33,8 +33,8 @@ function shortenAddress (address, num = 3) {
 const ERR_METAMASK_CONNECT = "Failed to connect to Metamask. Make sure you are in Rinkeby network and have an active account. Check dev console for more details";
 const ERR_BALANCER_CONNECT = "Can't connect to Balancer contract. Make sure you are in Rinkeby network and have an active account.";
 const ERR_MIN_BALANCE_CREATE_PORTFOLIO = "The min amount to create a portfolio is 0.5 ETH. Please deposit the required amount.";
-const ERR_MIN_BALANCE_INIT_PORTFOLIO = "The min amount to create a portfolio is 0.5 ETH. Please deposit the required amount.";
-const ERR_MIN_BALANCE_REBALANCE_PORTFOLIO = "The min amount to create a portfolio is 0.02 ETH. Please deposit the required amount.";
+const ERR_MIN_BALANCE_INIT_PORTFOLIO = "The min amount to initialize a portfolio is 0.5 ETH. Please deposit the required amount.";
+const ERR_MIN_BALANCE_REBALANCE_PORTFOLIO = "The min amount to rebalance a portfolio is 0.02 ETH. Please deposit the required amount.";
 
 App = {
   web3Provider: null,
@@ -360,7 +360,10 @@ App = {
 
       // if the user enters a bigger amount than their balance, let's withdraw the total balance
       let userBalance = App.web3.utils.toBN(App.userBalancerBalance);
-      if (App.web3.utils.toBN(withdrawValue).gt(userBalance)) {
+
+      // to avoid precision errors because the user will enter ether amount but the real balance is in wei
+      let minThreshold = App.web3.utils.toBN(App.web3.utils.toWei('0.01'));
+      if ((App.web3.utils.toBN(withdrawValue).sub(userBalance)).lt(minThreshold)) {
         withdrawValue = userBalance.toString();
       }
 
