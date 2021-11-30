@@ -67,6 +67,7 @@ To make the user life easier he could run a portfolio rebalance using this tool 
 ### Frontend
 
 - To have some available assets to create your portfolio, in the same truffle terminal run: `truffle(rinkebylocal)> exec scripts/add_default_tokens.js`
+- IMPORTANT: after running the command `migrate --reset`, make sure the deployed contract address matches with the one in the file `client/contracts/config.json` (line 198).
 - Then in a new terminal: `cd client`
 - The client dapp consists of static files. You could run it from VS Code with lite-server. But you can also run it from the terminal:
 - `npm install`
