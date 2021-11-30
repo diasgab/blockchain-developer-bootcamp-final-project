@@ -30,6 +30,9 @@ function shortenAddress (address, num = 3) {
   );
 }
 
+const TXT_LOADING = "Loading, please wait...";
+const TXT_CONNECT_TO_METAMASK = "Connect to MetaMask";
+const TXT_CONNECTING = "Connecting...";
 const ERR_METAMASK_CONNECT = "Failed to connect to Metamask. Make sure you are in Rinkeby network and have an active account. Check dev console for more details";
 const ERR_BALANCER_CONNECT = "Can't connect to Balancer contract. Make sure you are in Rinkeby network and have an active account.";
 const ERR_MIN_BALANCE_CREATE_PORTFOLIO = "The min amount to create a portfolio is 0.5 ETH. Please deposit the required amount.";
@@ -64,6 +67,8 @@ App = {
   initWeb3: async function () {
     /// Find or Inject Web3 Provider
     /// Modern dapp browsers...
+    App.showMetamaskConnecting();
+
     if (window.ethereum) {
       App.web3Provider = window.ethereum;
       try {
@@ -73,6 +78,10 @@ App = {
         // User denied account access...
         console.error("Error to connect to metamask: ", error);
         $("#metamaskError").text(ERR_METAMASK_CONNECT);
+
+        App.hideMetamaskConnecting();
+
+        return;
       }
     }
     // Legacy dapp browsers...
@@ -102,9 +111,15 @@ App = {
         console.error("User denied account access: ");
         console.error(error);
         $("#metamaskError").text(ERR_METAMASK_CONNECT);
+
+        App.hideMetamaskConnecting();
+
+        return App.showAnonAccount();
     }
 
     if (typeof userAccount == 'undefined' || userAccount.length == 0) {
+      App.hideMetamaskConnecting();
+
       return App.showAnonAccount();
     }
 
@@ -146,10 +161,27 @@ App = {
       console.error(error);
       $("#metamaskError").text(ERR_BALANCER_CONNECT);
 
+      App.hideMetamaskConnecting();
+
       return App.showAnonAccount();
     }
 
+    // if we reached this point then we are good to go
+    App.hideMetamaskConnecting();
+
     return App.showConnectedAccount();
+  },
+
+  showMetamaskConnecting: function () {
+    $("#homeLoading").show();
+    $("#btnConnectMetamask").text(TXT_CONNECTING);
+    $("#btnConnectMetamask").addClass("disabled");
+  },
+
+  hideMetamaskConnecting: function () {
+    $("#homeLoading").hide();
+    $("#btnConnectMetamask").text(TXT_CONNECT_TO_METAMASK);
+    $("#btnConnectMetamask").removeClass("disabled");
   },
 
   initBalancerContract: async function () {
@@ -314,7 +346,8 @@ App = {
       e.preventDefault();
       $("#depositError").text("");
       btnDeposit.addClass("disabled");
-      btnDeposit.text("Loading...");
+      btnDeposit.text(TXT_LOADING);
+      $("#depositLoading").show();
       let depositValue = $("#inputDepositAmount").val();
       try {
         await App.contracts.balancer.methods.deposit().send({
@@ -327,6 +360,7 @@ App = {
         $("#depositError").text("Failed to make deposit. If the problem persist make sure to reset your MM account and try again.");
         btnDeposit.removeClass("disabled");
         btnDeposit.text("Deposit");
+        $("#depositLoading").hide();
         $("#inputDepositAmount").val("");
 
         return
@@ -334,6 +368,7 @@ App = {
 
       btnDeposit.removeClass("disabled");
       btnDeposit.text("Deposit");
+      $("#depositLoading").hide();
       $("#inputDepositAmount").val("");
 
       // on success
@@ -354,7 +389,8 @@ App = {
     btnWithdraw.on("click", async (e) => {
       e.preventDefault();
       btnWithdraw.addClass("disabled");
-      btnWithdraw.text("Loading...");
+      btnWithdraw.text(TXT_LOADING);
+      $("#withdrawLoading").show();
       let withdrawValue = $("#inputWithdrawAmount").val();
       withdrawValue = App.web3.utils.toWei(withdrawValue);
 
@@ -379,6 +415,7 @@ App = {
         btnWithdraw.removeClass("disabled");
         btnWithdraw.text("Withdraw");
         $("#inputWithdrawAmount").val("");
+        $("#withdrawLoading").hide();
 
         return;
       }
@@ -386,6 +423,7 @@ App = {
       btnWithdraw.removeClass("disabled");
       btnWithdraw.text("Withdraw");
       $("#inputWithdrawAmount").val("");
+      $("#withdrawLoading").hide();
 
       await App.loadUserPortfolio();
       App.showConnectedAccount();
@@ -400,7 +438,8 @@ App = {
       }
 
       btnConfirmPortfolio.addClass("disabled");
-      btnConfirmPortfolio.text("Loading...");
+      btnConfirmPortfolio.text(TXT_LOADING);
+      $("#createLoading").show();
 
       console.log("About to create portfolio: ", App.createPortfolio);
       let assets = [];
@@ -421,12 +460,14 @@ App = {
 
         btnConfirmPortfolio.removeClass("disabled");
         btnConfirmPortfolio.text("Confirm");
+        $("#createLoading").hide();
 
         return;
       }
 
       btnConfirmPortfolio.removeClass("disabled");
       btnConfirmPortfolio.text("Confirm");
+      $("#createLoading").hide();
 
       await App.loadUserPortfolio();
       App.showConnectedAccount();
@@ -442,7 +483,8 @@ App = {
       }
 
       btnRunInitPortfolio.addClass("disabled");
-      btnRunInitPortfolio.text("Loading...");
+      btnRunInitPortfolio.text(TXT_LOADING);
+      $("#initLoading").show();
 
       try {
         await App.contracts.balancer.methods
@@ -455,12 +497,14 @@ App = {
 
         btnRunInitPortfolio.removeClass("disabled");
         btnRunInitPortfolio.text("Run Initial Portfolio distribution");
+        $("#initLoading").hide();
 
         return;
       }
 
       btnRunInitPortfolio.removeClass("disabled");
       btnRunInitPortfolio.text("Run Initial Portfolio distribution");
+      $("#initLoading").hide();
 
       await App.loadUserPortfolio();
       App.showConnectedAccount();
@@ -476,7 +520,8 @@ App = {
       }
 
       btnRunPortfolioRebalance.addClass("disabled");
-      btnRunPortfolioRebalance.text("Loading...");
+      btnRunPortfolioRebalance.text(TXT_LOADING);
+      $("#rebalanceLoading").show();
 
       try {
         await App.contracts.balancer.methods
@@ -489,12 +534,14 @@ App = {
 
         btnRunPortfolioRebalance.removeClass("disabled");
         btnRunPortfolioRebalance.text("Run Portfolio Rebalance");
+        $("#rebalanceLoading").hide();
 
         return;
       }
 
       $("#btnRunPortfolioRebalance").removeClass("disabled");
       btnRunPortfolioRebalance.text("Run Portfolio Rebalance");
+      $("#rebalanceLoading").hide();
 
       await App.loadUserPortfolio();
       App.showConnectedAccount();
@@ -505,7 +552,8 @@ App = {
       e.preventDefault();
       $("#deletePortfolioError").text("");
       btnDeletePortfolio.addClass("disabled");
-      btnDeletePortfolio.text("Loading...");
+      btnDeletePortfolio.text(TXT_LOADING);
+      $("#deleteLoading").show();
 
       try {
         await App.contracts.balancer.methods
@@ -518,12 +566,14 @@ App = {
 
         btnDeletePortfolio.removeClass("disabled");
         btnDeletePortfolio.text("Delete");
+        $("#deleteLoading").hide();
 
         return;
       }
 
       btnDeletePortfolio.removeClass("disabled");
       btnDeletePortfolio.text("Delete");
+      $("#deleteLoading").hide();
 
       await App.loadUserPortfolio();
       App.showConnectedAccount();
