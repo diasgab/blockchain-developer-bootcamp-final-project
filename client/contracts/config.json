@@ -1,0 +1,202 @@
+{
+	"networks": {
+      "4": {
+        "events": {
+          "0xf59d0ae4e98bf93f09241ca4f8223fb0ecfebf4027c3087280ecec9c18d32f75": {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": false,
+                "internalType": "address",
+                "name": "assetAddress",
+                "type": "address"
+              }
+            ],
+            "name": "LogAllowedAssetAdded",
+            "type": "event"
+          },
+          "0xa8126f7572bb1fdeae5b5aa9ec126438b91f658a07873f009d041ae690f3a193": {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": false,
+                "internalType": "address",
+                "name": "accountAddress",
+                "type": "address"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
+              }
+            ],
+            "name": "LogDepositMade",
+            "type": "event"
+          },
+          "0x74f265d2619fe6a0183c9524a5120afb2050287b300ca0770ae5834da23c2088": {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": false,
+                "internalType": "address",
+                "name": "assetAddress",
+                "type": "address"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "percentage",
+                "type": "uint256"
+              }
+            ],
+            "name": "LogPortfolioAssetAdded",
+            "type": "event"
+          },
+          "0xb24dcbc2f0ea9133e820ca155e83232c8e2612051982b9edc7234fd0f3692cf9": {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": false,
+                "internalType": "address",
+                "name": "accountAddress",
+                "type": "address"
+              }
+            ],
+            "name": "LogPortfolioDeleted",
+            "type": "event"
+          },
+          "0xf1ac3a3ea39c1e8920e24fd3e5dcf23814d0219a425b9bee1320a052696cb66f": {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": false,
+                "internalType": "address",
+                "name": "accountAddress",
+                "type": "address"
+              }
+            ],
+            "name": "LogPortfolioSealed",
+            "type": "event"
+          },
+          "0xf9226daf630542048a23086c6af599511aac100ec8f532793cc9697d061bed7e": {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": false,
+                "internalType": "address",
+                "name": "accountAddress",
+                "type": "address"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "withdrawAmount",
+                "type": "uint256"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "newBalance",
+                "type": "uint256"
+              }
+            ],
+            "name": "LogWithdrawal",
+            "type": "event"
+          },
+          "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0": {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": true,
+                "internalType": "address",
+                "name": "previousOwner",
+                "type": "address"
+              },
+              {
+                "indexed": true,
+                "internalType": "address",
+                "name": "newOwner",
+                "type": "address"
+              }
+            ],
+            "name": "OwnershipTransferred",
+            "type": "event"
+          },
+          "0xfd81611dac855213e752208be39bc53f2909b14f5ad8c5cdb1e30ea89285b56e": {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": false,
+                "internalType": "address[]",
+                "name": "assets",
+                "type": "address[]"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint256[]",
+                "name": "percentages",
+                "type": "uint256[]"
+              }
+            ],
+            "name": "LogPortfolioCreated",
+            "type": "event"
+          },
+          "0x3f828ec947bbbb37da475df9242735a8e787ab05f8456beea990372be2af702d": {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": false,
+                "internalType": "address",
+                "name": "accountAddress",
+                "type": "address"
+              },
+              {
+                "indexed": false,
+                "internalType": "address[]",
+                "name": "assets",
+                "type": "address[]"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint256[]",
+                "name": "percentages",
+                "type": "uint256[]"
+              }
+            ],
+            "name": "LogPortfolioCreated",
+            "type": "event"
+          },
+          "0xd96c4cdad827acce23afcb802d114a22c28c04e378587c3d8a3acc9bd17f6c07": {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": false,
+                "internalType": "address",
+                "name": "accountAddress",
+                "type": "address"
+              }
+            ],
+            "name": "LogPortfolioInitialized",
+            "type": "event"
+          },
+          "0x001e4429e0a5f966bd93a34d42b9d339b020f3d39203e59ca7377d875ed4e9d7": {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": false,
+                "internalType": "address",
+                "name": "accountAddress",
+                "type": "address"
+              }
+            ],
+            "name": "LogPortfolioRebalanced",
+            "type": "event"
+          }
+        },
+        "links": {},
+        "address": "0xF33d077A05b62086Db182D3F5D8E9EfA0A4fFA31",
+        "transactionHash": "0x939ce0da4c63b9088a61e098a1ee7c7513cd886c92767e6d86b1b5a3354f19c7"
+      }
+    }
+}

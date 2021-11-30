@@ -4,6 +4,14 @@
 
 https://elastic-pare-e13eee.netlify.app
 
+## Screencast link
+
+PENDING
+
+## Public Ethereum wallet for certification:
+
+`0xA1b5047cD29BAc1700aa6ff9E877bde158d689Cc`
+
 ## Project description
 
 A user can create a portfolio by selecting from the assets available in Balancer contract. A portfolio consists of assets with their corresponding percentage assignment being the maximum 100%.
@@ -52,6 +60,9 @@ To make the user life easier he could run a portfolio rebalance using this tool 
 - Run `truffle(rinkebylocal)> migrate --reset` (this will also create a config file with the new contract address for the client)
 - Run tests in Truffle console: `truffle(rinkebylocal)> test`
 - `rinkebylocal` network id is 1337, remember to change it in Metamask as well!
+- When running the tests you should see something like:
+
+![TestResults](./docs/images/tests.png)
 
 ### Frontend
 
@@ -79,13 +90,6 @@ To make the user life easier he could run a portfolio rebalance using this tool 
 - Make sure your Metamask localhost network is in port `8545` and chain id is `1337`.
 - If you get `TXRejectedError` when sending a transaction, reset your Metamask account from Advanced settings.
 
-## Screencast link
-
-PENDING
-
-## Public Ethereum wallet for certification:
-
-`PENDING`
 
 ## Simple workflow
 
