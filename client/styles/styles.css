@@ -43,3 +43,8 @@ main {
 .menu-active {
     font-weight: bold;
 }
+
+.error-message {
+    color: #ab2a2a;
+    padding: 15px;
+}

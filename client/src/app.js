@@ -30,6 +30,12 @@ function shortenAddress (address, num = 3) {
   );
 }
 
+const ERR_METAMASK_CONNECT = "Failed to connect to Metamask. Make sure you are in Rinkeby network and have an active account. Check dev console for more details";
+const ERR_BALANCER_CONNECT = "Can't connect to Balancer contract. Make sure you are in Rinkeby network and have an active account.";
+const ERR_MIN_BALANCE_CREATE_PORTFOLIO = "The min amount to create a portfolio is 0.5 ETH. Please deposit the required amount.";
+const ERR_MIN_BALANCE_INIT_PORTFOLIO = "The min amount to create a portfolio is 0.5 ETH. Please deposit the required amount.";
+const ERR_MIN_BALANCE_REBALANCE_PORTFOLIO = "The min amount to create a portfolio is 0.02 ETH. Please deposit the required amount.";
+
 App = {
   web3Provider: null,
   web3: null,
@@ -65,7 +71,8 @@ App = {
         await window.ethereum.enable();
       } catch (error) {
         // User denied account access...
-        console.error("User denied account access");
+        console.error("Error to connect to metamask: ", error);
+        $("#metamaskError").text(ERR_METAMASK_CONNECT);
       }
     }
     // Legacy dapp browsers...
@@ -86,10 +93,23 @@ App = {
     App.web3 = new Web3(App.web3Provider);
 
     // Retrieving accounts
-    const accounts = await App.web3.eth.getAccounts();
+    let userAccount = "";
+    try {
+      const accounts = await App.web3.eth.getAccounts();
+      userAccount = accounts[0];
+    } catch (error) {
+        // User denied account access...
+        console.error("User denied account access: ");
+        console.error(error);
+        $("#metamaskError").text(ERR_METAMASK_CONNECT);
+    }
 
-    let balance = await App.web3.eth.getBalance(accounts[0]);
-    App.metamaskAccountID = accounts[0];
+    if (typeof userAccount == 'undefined' || userAccount.length == 0) {
+      return App.showAnonAccount();
+    }
+
+    let balance = await App.web3.eth.getBalance(userAccount);
+    App.metamaskAccountID = userAccount;
     App.metamaskAccountBalance = Number(
       App.web3.utils.fromWei(balance, "ether")
     ).toFixed(4);
@@ -118,14 +138,18 @@ App = {
     console.log("metamaskAccountBalance:", App.metamaskAccountBalance);
     console.log("metamaskAccountBalance:", App.metamaskAccountNetwork);
 
-    if (App.metamaskAccountID.length != 0) {
+    try {
       await App.initBalancerContract();
       await App.loadUserPortfolio();
+    } catch (error) {
+      console.error("Error to connect to balancer contract");
+      console.error(error);
+      $("#metamaskError").text(ERR_BALANCER_CONNECT);
 
-      return App.showConnectedAccount();
+      return App.showAnonAccount();
     }
 
-    return App.showAnonAccount();
+    return App.showConnectedAccount();
   },
 
   initBalancerContract: async function () {
@@ -150,7 +174,7 @@ App = {
         .balances(App.metamaskAccountID)
         .call()
     ).toString();
-    App.userBalancerBalance = Number(App.web3.utils.fromWei(balance)).toFixed(4);
+    App.userBalancerBalance = balance;
     console.log("User balancer balance: " + App.userBalancerBalance);
 
     await App.loadUserFullPortfolio();
@@ -213,11 +237,21 @@ App = {
       "deletePortfolioScreen",
     ]
 
+    let menuItems = [
+      "btnMenuDeposit",
+      "btnMenuWithdraw",
+      "btnMenuCreatePortfolio",
+      "btnMenuManagePortfolio",
+      "btnMenuDeletePortfolio",
+    ]
+
     for (let i = 0; i < screens.length; i++) {
       if (screens[i] == screen) {
         $("#" + screens[i]).show();
+        $("#" + menuItems[i]).addClass("menu-active")
       } else {
         $("#" + screens[i]).hide();
+        $("#" + menuItems[i]).removeClass("menu-active")
       }
     }
   },
@@ -226,7 +260,7 @@ App = {
    * Set the app initial state
    */
   setInitialState: function () {
-    $("#anonMain").hide();
+    $("#anonMain").show();
     $("#connectedMain").hide();
     $("#topNavbar").hide();
     $("#btnDeposit").addClass("disabled");
@@ -262,10 +296,14 @@ App = {
       this.showScreen("deletePortfolioScreen");
     });
 
+    $("#btnConnectMetamask").on("click", async (e) => {
+      e.preventDefault();
+      await App.initWeb3();
+    });
+
     const btnDeposit = $("#btnDeposit");
     $("#inputDepositAmount").on("keyup", (value) => {
-      // TODO: validate the input amount is a valid number
-      if (value.target.value > 0) {
+      if (value.target.value > 0 && value.target.value < 10) {
         btnDeposit.removeClass("disabled");
       } else {
         btnDeposit.addClass("disabled");
@@ -274,14 +312,28 @@ App = {
 
     btnDeposit.on("click", async (e) => {
       e.preventDefault();
+      $("#depositError").text("");
       btnDeposit.addClass("disabled");
+      btnDeposit.text("Loading...");
       let depositValue = $("#inputDepositAmount").val();
-      await App.contracts.balancer.methods.deposit().send({
-        from: App.metamaskAccountID,
-        value: App.web3.utils.toWei(depositValue, "ether"),
-      });
+      try {
+        await App.contracts.balancer.methods.deposit().send({
+          from: App.metamaskAccountID,
+          value: App.web3.utils.toWei(depositValue, "ether"),
+        });
+      } catch (error) {
+        console.log("Failed to deposit");
+        console.error(error);
+        $("#depositError").text("Failed to make deposit. If the problem persist make sure to reset your MM account and try again.");
+        btnDeposit.removeClass("disabled");
+        btnDeposit.text("Deposit");
+        $("#inputDepositAmount").val("");
+
+        return
+      }
 
       btnDeposit.removeClass("disabled");
+      btnDeposit.text("Deposit");
       $("#inputDepositAmount").val("");
 
       // on success
@@ -302,12 +354,34 @@ App = {
     btnWithdraw.on("click", async (e) => {
       e.preventDefault();
       btnWithdraw.addClass("disabled");
+      btnWithdraw.text("Loading...");
       let withdrawValue = $("#inputWithdrawAmount").val();
-      await App.contracts.balancer.methods
-        .withdraw(App.web3.utils.toWei(withdrawValue, "ether"))
-        .send({ from: App.metamaskAccountID });
+      withdrawValue = App.web3.utils.toWei(withdrawValue);
+
+      // if the user enters a bigger amount than their balance, let's withdraw the total balance
+      let userBalance = App.web3.utils.toBN(App.userBalancerBalance);
+      if (App.web3.utils.toBN(withdrawValue).gt(userBalance)) {
+        withdrawValue = userBalance.toString();
+      }
+
+      try {
+        await App.contracts.balancer.methods
+          .withdraw(withdrawValue)
+          .send({ from: App.metamaskAccountID });
+      } catch (error) {
+        console.log("Failed to withdraw");
+        console.error(error);
+        $("#withdrawError").text("Failed to withdraw. If the problem persist make sure to reset your MM account and try again.");
+
+        btnWithdraw.removeClass("disabled");
+        btnWithdraw.text("Withdraw");
+        $("#inputWithdrawAmount").val("");
+
+        return;
+      }
 
       btnWithdraw.removeClass("disabled");
+      btnWithdraw.text("Withdraw");
       $("#inputWithdrawAmount").val("");
 
       await App.loadUserPortfolio();
@@ -317,7 +391,13 @@ App = {
     const btnConfirmPortfolio = $("#btnConfirmPortfolio");
     btnConfirmPortfolio.on("click", async (e) => {
       e.preventDefault();
+      $("#createPortfolioError").text("");
+      if (!App.validateCreatePortfolio()) {
+        return;
+      }
+
       btnConfirmPortfolio.addClass("disabled");
+      btnConfirmPortfolio.text("Loading...");
 
       console.log("About to create portfolio: ", App.createPortfolio);
       let assets = [];
@@ -327,62 +407,173 @@ App = {
         percentages.push(App.createPortfolio[i].value);
       }
 
-      await App.contracts.balancer.methods
-        .createPortfolio(assets, percentages)
-        .send({ from: App.metamaskAccountID });
+      try {
+        await App.contracts.balancer.methods
+          .createPortfolio(assets, percentages)
+          .send({ from: App.metamaskAccountID });
+      } catch (error) {
+        console.log("Failed to create portfolio");
+        console.error(error);
+        $("#createPortfolioError").text("Failed to create portfolio. If the problem persist make sure to reset your MM account and try again.");
+
+        btnConfirmPortfolio.removeClass("disabled");
+        btnConfirmPortfolio.text("Confirm");
+
+        return;
+      }
 
       btnConfirmPortfolio.removeClass("disabled");
+      btnConfirmPortfolio.text("Confirm");
 
       await App.loadUserPortfolio();
       App.showConnectedAccount();
     });
 
+    const btnRunInitPortfolio = $("#btnRunInitPortfolio");
     $("#btnRunInitPortfolio").on("click", async (e) => {
       e.preventDefault();
-      $("#btnRunInitPortfolio").addClass("disabled");
-      await App.contracts.balancer.methods
-        .runInitialPortfolioDistribution()
-        .send({ from: App.metamaskAccountID });
 
-      $("#btnRunInitPortfolio").removeClass("disabled");
+      $("#runInitPortfolioError").text("");
+      if (!App.validateRunInitPortfolio()) {
+        return;
+      }
+
+      btnRunInitPortfolio.addClass("disabled");
+      btnRunInitPortfolio.text("Loading...");
+
+      try {
+        await App.contracts.balancer.methods
+          .runInitialPortfolioDistribution()
+          .send({ from: App.metamaskAccountID });
+      } catch (error) {
+        console.log("Failed to initialize portfolio");
+        console.error(error);
+        $("#runInitPortfolioError").text("Failed to initialize portfolio. If the problem persist make sure to reset your MM account and try again.");
+
+        btnRunInitPortfolio.removeClass("disabled");
+        btnRunInitPortfolio.text("Run Initial Portfolio distribution");
+
+        return;
+      }
+
+      btnRunInitPortfolio.removeClass("disabled");
+      btnRunInitPortfolio.text("Run Initial Portfolio distribution");
 
       await App.loadUserPortfolio();
       App.showConnectedAccount();
     });
 
-    $("#btnRunPortfolioRebalance").on("click", async (e) => {
+    const btnRunPortfolioRebalance = $("#btnRunPortfolioRebalance");
+    btnRunPortfolioRebalance.on("click", async (e) => {
       e.preventDefault();
-      $("#btnRunPortfolioRebalance").addClass("disabled");
-      await App.contracts.balancer.methods
-        .runPortfolioRebalance()
-        .send({ from: App.metamaskAccountID });
+
+      $("#runPortfolioRebalanceError").text("");
+      if (!App.validateRunPortfolioRebalance()) {
+        return;
+      }
+
+      btnRunPortfolioRebalance.addClass("disabled");
+      btnRunPortfolioRebalance.text("Loading...");
+
+      try {
+        await App.contracts.balancer.methods
+          .runPortfolioRebalance()
+          .send({ from: App.metamaskAccountID });
+      } catch (error) {
+        console.log("Failed to initialize portfolio");
+        console.error(error);
+        $("#runPortfolioRebalanceError").text("Failed to run portfolio rebalance. If the problem persist make sure to reset your MM account and try again.");
+
+        btnRunPortfolioRebalance.removeClass("disabled");
+        btnRunPortfolioRebalance.text("Run Portfolio Rebalance");
+
+        return;
+      }
 
       $("#btnRunPortfolioRebalance").removeClass("disabled");
+      btnRunPortfolioRebalance.text("Run Portfolio Rebalance");
 
       await App.loadUserPortfolio();
       App.showConnectedAccount();
     });
 
-    $("#btnDeletePortfolio").on("click", async (e) => {
+    const btnDeletePortfolio = $("#btnDeletePortfolio");
+    btnDeletePortfolio.on("click", async (e) => {
       e.preventDefault();
-      $("#btnDeletePortfolio").addClass("disabled");
-      await App.contracts.balancer.methods
-        .deletePortfolio()
-        .send({ from: App.metamaskAccountID });
+      $("#deletePortfolioError").text("");
+      btnDeletePortfolio.addClass("disabled");
+      btnDeletePortfolio.text("Loading...");
 
-      $("#btnDeletePortfolio").removeClass("disabled");
+      try {
+        await App.contracts.balancer.methods
+          .deletePortfolio()
+          .send({ from: App.metamaskAccountID });
+      } catch (error) {
+        console.log("Failed to delete portfolio");
+        console.error(error);
+        $("#deletePortfolioError").text("Failed to delete portfolio. If the problem persist make sure to reset your MM account and try again.");
+
+        btnDeletePortfolio.removeClass("disabled");
+        btnDeletePortfolio.text("Delete");
+
+        return;
+      }
+
+      btnDeletePortfolio.removeClass("disabled");
+      btnDeletePortfolio.text("Delete");
 
       await App.loadUserPortfolio();
       App.showConnectedAccount();
     });
+  },
+
+  validateCreatePortfolio: function () {
+    if (App.userBalancerBalance < 500000000000000000) {
+      $("#createPortfolioError").text(ERR_MIN_BALANCE_CREATE_PORTFOLIO);
+      return false;
+    }
+
+    if (App.createPortfolio.length < 2) {
+      $("#createPortfolioError").text("You must include at least 2 assets.");
+      return false;
+    }
+
+    for (let i = 0; i < App.createPortfolio.length; i++) {
+      if (App.createPortfolio[i].value < 1 || App.createPortfolio[i].value > 99) {
+        $("#createPortfolioError").text("The percentage range for each asset is 1 to 99.");
+        return false;
+      }
+    }
+
+    return true;
+  },
+
+  validateRunInitPortfolio: function () {
+    $("#runInitPortfolioError").text("");
+    if (App.userBalancerBalance < 500000000000000000) {
+      $("#runInitPortfolioError").text(ERR_MIN_BALANCE_INIT_PORTFOLIO);
+      return false;
+    }
+
+    return true;
+  },
+
+  validateRunPortfolioRebalance: function () {
+    $("#runPortfolioRebalanceError").text("");
+    if (App.userBalancerBalance < 20000000000000000) {
+      $("#runPortfolioRebalanceError").text(ERR_MIN_BALANCE_REBALANCE_PORTFOLIO);
+      return false;
+    }
+
+    return true;
   },
 
   showUserBalancerBalance: function () {
-    $("#txtBalancerBalance").text(App.userBalancerBalance + " ETH");
+    $("#txtBalancerBalance").text(Number(App.web3.utils.fromWei(App.userBalancerBalance)).toFixed(4) + " ETH");
   },
 
   isNewUser: function () {
-    return App.userBalancerBalance == "0.0000" && App.userPortfolioStatus == Status.EMPTY;
+    return App.userBalancerBalance == 0 && App.userPortfolioStatus == Status.EMPTY;
   },
 
   showAnonAccount: function () {
@@ -407,46 +598,58 @@ App = {
     const liMenuDeletePortfolio = $("#liMenuDeletePortfolio");
     const liMenuWithdraw = $("#liMenuWithdraw");
 
+    liMenuDeposit.show();
     if (App.isNewUser()) {
-      liMenuDeposit.show();
       liMenuPortfolio.hide();
       liMenuWithdraw.hide();
       App.showUserBalancerBalance();
       this.showScreen("depositScreen");
     } else {
       App.showUserBalancerBalance();
-      liMenuDeposit.hide();
       liMenuPortfolio.show();
+      liMenuWithdraw.show();
+
       if (App.userPortfolioStatus == Status.EMPTY) {
         App.displayCreatePortfolioForm();
         this.showScreen("createPortfolioScreen");
         liMenuCreatePortfolio.show();
         liMenuManagePortfolio.hide();
         liMenuDeletePortfolio.hide();
-      } else {
-        if (App.userPortfolioStatus == Status.RUNNING) {
-          $("#containerRebalancePortfolio").show();
-          $("#containerInitPortfolio").hide();
-          App.displayManagePortfolioForm();
-        } else {
-          $("#containerRebalancePortfolio").hide();
-          $("#containerInitPortfolio").show();
-          App.displayInitPortfolioForm();
-        }
+      }
 
+      if (App.userPortfolioStatus == Status.SEALED) {
         this.showScreen("managePortfolioScreen");
+        App.displayInitPortfolioForm();
+        $("#containerRebalancePortfolio").hide();
+        $("#containerInitPortfolio").show();
         liMenuCreatePortfolio.hide();
         liMenuManagePortfolio.show();
         liMenuDeletePortfolio.show();
       }
-      liMenuWithdraw.show();
+
+      if (App.userPortfolioStatus == Status.RUNNING || App.userPortfolioStatus == Status.INITIALIZED) {
+        this.showScreen("managePortfolioScreen");
+        App.displayManagePortfolioForm();
+        $("#containerRebalancePortfolio").show();
+        $("#containerInitPortfolio").hide();
+        liMenuCreatePortfolio.hide();
+        liMenuManagePortfolio.show();
+        liMenuDeletePortfolio.show();
+      }
     }
   },
 
   displayCreatePortfolioForm: async function () {
+
+    $("#createPortfolioError").text("");
+    if (App.userBalancerBalance < 500000000000000000) {
+      $("#createPortfolioError").text(ERR_MIN_BALANCE_CREATE_PORTFOLIO);
+    }
+
     App.allowedTokens = await App.contracts.balancer.methods
       .allowedAssetsList()
       .call();
+
     console.log("Allowed tokens: ", App.allowedTokens);
     let assets = [];
     App.allowedTokens.map((value, index) => {
@@ -469,16 +672,15 @@ App = {
       rows.push(markup);
     });
 
-    let $table = $("#createPortfolioTable");
-    $table.children("tbody").empty();
+    let table = $("#createPortfolioTable");
+    table.children("tbody").empty();
 
     $.each(rows, function (index, row) {
-      $table.children("tbody").append(row);
+      table.children("tbody").append(row);
     });
   },
 
   sum: function (index, value) {
-    console.log("QUE PASO");
 
     App.createPortfolioCoins[index] = Number(value);
 
@@ -502,6 +704,11 @@ App = {
   },
 
   displayInitPortfolioForm: async function () {
+    $("#runInitPortfolioError").text("");
+    if (App.userBalancerBalance < 500000000000000000) {
+      $("#runInitPortfolioError").text(ERR_MIN_BALANCE_INIT_PORTFOLIO);
+    }
+
     let rows = [];
     let markup;
     this.assetAssignments.map((asset, i) => {
@@ -521,15 +728,20 @@ App = {
       rows.push(markup);
     });
 
-    let $table = $("#initPortfolioTable");
-    $table.children("tbody").empty();
+    let table = $("#initPortfolioTable");
+    table.children("tbody").empty();
 
     $.each(rows, function (index, row) {
-      $table.children("tbody").append(row);
+      table.children("tbody").append(row);
     });
   },
 
   displayManagePortfolioForm: async function () {
+    $("#runInitPortfolioError").text("");
+    if (App.userBalancerBalance < 20000000000000000) {
+      $("#runInitPortfolioError").text(ERR_MIN_BALANCE_REBALANCE_PORTFOLIO);
+    }
+
     let rows = [];
     let markup;
     this.assetAssignments.map((asset, i) => {
@@ -552,11 +764,11 @@ App = {
       rows.push(markup);
     });
 
-    let $table = $("#managePortfolioTable");
-    $table.children("tbody").empty();
+    let table = $("#managePortfolioTable");
+    table.children("tbody").empty();
 
     $.each(rows, function (index, row) {
-      $table.children("tbody").append(row);
+      table.children("tbody").append(row);
     });
 
     $("#txtRebalancePortfolioTotalPrice").text(App.formatETH(App.createdPortfolioTotal));
