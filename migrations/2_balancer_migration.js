@@ -8,12 +8,10 @@ module.exports = async function (deployer) {
   );
 
   let config = {
-    balancerAddress: Balancer.address
+    networks: Balancer.networks
   }
-  fs.writeFileSync(__dirname + '/../client/src/config.json',JSON.stringify(config, null, '\t'), 'utf-8');
 
-  // NOTE: the address in this file is updated later, that's the reason why we need to copy the address separate
-  fs.copyFile(__dirname + '/../build/contracts/Balancer.json', __dirname + '/../client/contracts/Balancer.json', function (err) {
-    if (err) throw err;
-  });
+  // prepare these files for the client app
+  fs.writeFileSync(__dirname + '/../client/contracts/config.json',JSON.stringify(config, null, '\t'), 'utf-8');
+  fs.writeFileSync(__dirname + '/../client/contracts/Balancer.json', JSON.stringify(Balancer.abi), 'utf-8');
 }

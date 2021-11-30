@@ -129,12 +129,13 @@ App = {
   },
 
   initBalancerContract: async function () {
-    const data = await $.getJSON("./contracts/Balancer.json");
+    const abi = await $.getJSON("./contracts/Balancer.json");
+    const config = await $.getJSON("./contracts/config.json");
 
     const netId = await App.web3.eth.net.getId();
-    const deployedNetwork = data.networks[netId];
+    const deployedNetwork = config.networks[netId];
     App.contracts.balancer = new App.web3.eth.Contract(
-      data.abi,
+      abi,
       deployedNetwork && deployedNetwork.address
     );
   },
